@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  /* Discord-style Deep Indigo Base */
+  --background: #0b0f1f;
+  --foreground: #f1f5f9;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Global Reset */
+body {
+  background: linear-gradient(
+    to bottom right,
+    #0b0f1f 0%,
+    #11183a 40%,
+    #1f2b6b 100%
+  );
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
