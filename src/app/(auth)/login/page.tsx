@@ -39,14 +39,14 @@ export default function AuthPage() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative text-white font-sans overflow-hidden bg-black">
       {/* Background */}
       <div className="absolute inset-0 z-0">
-        {/* <DarkVeil
+        <DarkVeil
           hueShift={0}
           noiseIntensity={0}
           scanlineIntensity={0}
           speed={0.5}
           scanlineFrequency={0}
           warpAmount={0}
-        /> */}
+        />
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[0px]"></div>
       </div>
 
