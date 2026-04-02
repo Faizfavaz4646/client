@@ -4,16 +4,18 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
-import { 
-  MessageSquare, Hash, Plus, Settings, 
+import {
+  MessageSquare, Hash, Plus, Settings,
   Search, Bell, User, X, Check, Copy,
   Building2, Sparkles, Globe, Loader2,
-  Mic, Video, Music, Volume2, Trash2
+  Mic, Video, Music, Volume2, Trash2,
+  LogOut, HelpCircle, Menu
 } from 'lucide-react';
 import { WorkspaceService } from '@/lib/services/workspace.service';
 import { api } from '@/lib/api';
+import DarkVeil from '../(marketing)/DarkVeil';
 import { AnimatePresence, motion } from 'framer-motion';
-import { IUserSafe } from '@/store/authStore';
+import type { IUserSafe } from '@/types/auth';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -22,13 +24,14 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   const setUser = useAuthStore((state) => state.setUser);
   const isLoading = useAuthStore((state) => state.isLoading);
   const setLoading = useAuthStore((state) => state.setLoading);
-  
+
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isChannelModalOpen, setIsChannelModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [channels, setChannels] = React.useState<any[]>([]);
   const [isChannelsLoading, setIsChannelsLoading] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const activeWorkspaceId = pathname?.split('/')[2];
   const activeWorkspace = user?.workspaces?.find(w => w.workspaceId === activeWorkspaceId);
@@ -58,10 +61,12 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
 
   // 2. Fetch Channels for active workspace
   React.useEffect(() => {
-    if (!activeWorkspaceId) {
+    // 🚨 THE FIX: Block 'join', 'setup', or any other non-ID words
+    if (!activeWorkspaceId || activeWorkspaceId === 'join' || activeWorkspaceId === 'setup') {
       setChannels([]);
       return;
     }
+
     const fetchChannels = async () => {
       try {
         setIsChannelsLoading(true);
@@ -102,7 +107,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-black text-white gap-4">
-        <motion.div 
+        <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
           className="w-10 h-10 border-2 border-slate-500/20 border-t-white rounded-full"
@@ -113,18 +118,37 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-black text-slate-300 overflow-hidden font-sans">
-      
+    <div className="flex h-screen bg-[#0a0a0a] text-slate-300 overflow-hidden font-sans relative">
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <DarkVeil
+          hueShift={0}
+          noiseIntensity={0}
+          scanlineIntensity={0}
+          speed={0.5}
+          scanlineFrequency={0}
+          warpAmount={0}
+        />
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
+      </div>
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/80 z-[40] md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* ─── FAR LEFT SIDEBAR (WORKSPACES) ─── */}
-      <aside className="w-20 bg-[#000000] border-r border-slate-800/60 flex flex-col items-center py-4 gap-4 shrink-0 z-20">
+      <aside className={`absolute md:relative z-[50] md:z-20 h-full w-20 bg-black/60 backdrop-blur-xl border-r border-slate-800/60 flex flex-col items-center py-4 gap-4 shrink-0 transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Home / Direct Messages placeholder */}
         <div className="group relative">
           <button className="w-12 h-12 bg-slate-900 rounded-3xl hover:rounded-xl transition-all duration-300 flex items-center justify-center hover:bg-white/10 text-slate-400 hover:text-white">
-             <MessageSquare className="w-6 h-6" />
+            <MessageSquare className="w-6 h-6" />
           </button>
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 bg-white rounded-r-full transition-all duration-300 group-hover:h-5"></div>
         </div>
-        
+
         <div className="w-8 h-[2px] bg-slate-800 rounded-full"></div>
 
         {/* Workspace List (Dynamic) */}
@@ -138,14 +162,25 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
             .slice(0, 2)
             .toUpperCase();
 
+          // Generate a deterministic gradient class based on the workspace ID's character sum
+          const gradients = [
+            "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500",
+            "bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600",
+            "bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500",
+            "bg-gradient-to-br from-rose-400 via-red-500 to-orange-500",
+            "bg-gradient-to-br from-amber-400 via-orange-500 to-red-500",
+            "bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-400"
+          ];
+          const hash = Array.from(ws.workspaceId).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+          const gradientClass = gradients[hash % gradients.length];
+
           return (
             <div key={ws.workspaceId} className="group relative">
-              <Link href={`/workspace/${ws.workspaceId}`}>
-                <button className={`w-12 h-12 rounded-xl flex items-center justify-center font-semibold transition-all ${
-                  isActive 
-                    ? "bg-white text-black shadow-lg" 
-                    : "bg-slate-800 hover:bg-slate-700 text-white"
-                }`}>
+              <Link href={`/workspace/${ws.workspaceId}`} onClick={() => setIsMobileMenuOpen(false)}>
+                <button className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${isActive
+                  ? `${gradientClass} shadow-[0_0_20px_rgba(255,255,255,0.3)] text-white ring-2 ring-white/30 scale-105`
+                  : `${gradientClass} opacity-70 hover:opacity-100 hover:scale-[1.02] text-white/90`
+                  }`}>
                   {initials}
                 </button>
               </Link>
@@ -160,40 +195,58 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         })}
 
         {/* Add Workspace / Create Workspace */}
-        <div className="group/btn relative mt-auto mb-4">
+        <div className="group/btn relative mt-auto">
           <div className="absolute left-[60px] top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-800 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 pointer-events-none group-hover/btn:opacity-100 transition-opacity z-50">
             {isOrgFounder ? 'Create Workspace' : 'Join Workspace'}
             <div className="absolute left-[-4px] top-1/2 -translate-y-1/2 border-[4px] border-transparent border-r-slate-800"></div>
           </div>
           {isOrgFounder ? (
-            <button 
+            <button
               onClick={() => setIsModalOpen(true)}
               className="w-12 h-12 bg-slate-900/80 border border-white/[0.06] rounded-xl hover:rounded-lg transition-all duration-300 flex items-center justify-center hover:bg-emerald-500/10 hover:border-emerald-500/30 text-emerald-500 hover:shadow-lg hover:shadow-emerald-500/5"
             >
-               <Plus className="w-5 h-5" />
+              <Plus className="w-5 h-5" />
             </button>
           ) : (
             <Link href="/workspace/join">
               <button className="w-12 h-12 bg-slate-900/80 border border-white/[0.06] rounded-xl hover:rounded-lg transition-all duration-300 flex items-center justify-center hover:bg-emerald-500/10 hover:border-emerald-500/30 text-emerald-500 hover:shadow-lg hover:shadow-emerald-500/5">
-                 <Plus className="w-5 h-5" />
+                <Plus className="w-5 h-5" />
               </button>
             </Link>
           )}
         </div>
+
+        <div className="w-8 h-[1px] bg-slate-800/80 my-2"></div>
+
+        <button className="w-12 h-12 rounded-xl flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all mb-1 group">
+          <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
+        </button>
+        <button className="w-12 h-12 rounded-xl flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all mb-1 group">
+          <HelpCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
+        </button>
+        <button
+          onClick={() => {
+            setUser(null);
+            router.push('/login');
+          }}
+          className="w-12 h-12 rounded-xl flex items-center justify-center text-red-500/60 hover:text-red-400 hover:bg-red-500/10 transition-all mb-4 group"
+        >
+          <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+        </button>
       </aside>
 
       {/* ─── CREATE WORKSPACE MODAL ─── */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsModalOpen(false)}
               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.97, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 12 }}
@@ -203,12 +256,12 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               {/* Top accent line */}
               <div className="h-[2px] bg-white/20" />
 
-                <CreateWorkspaceForm 
-                  onSuccess={(newUser: IUserSafe) => {
-                    setUser(newUser);
-                  }} 
-                  onClose={() => setIsModalOpen(false)}
-                />
+              <CreateWorkspaceForm
+                onSuccess={(newUser: IUserSafe) => {
+                  setUser(newUser);
+                }}
+                onClose={() => setIsModalOpen(false)}
+              />
             </motion.div>
           </div>
         )}
@@ -218,14 +271,14 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
       <AnimatePresence>
         {isChannelModalOpen && activeWorkspaceId && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsChannelModalOpen(false)}
               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.97, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 12 }}
@@ -233,75 +286,76 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               className="relative w-full max-w-[420px] bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-0 shadow-2xl overflow-hidden"
             >
               <div className="h-[2px] bg-white/20" />
-                <CreateChannelForm 
-                  workspaceId={activeWorkspaceId}
-                  onSuccess={(newChannel: any) => {
-                    setChannels(prev => [...prev, newChannel]);
-                    setIsChannelModalOpen(false);
-                  }} 
-                  onClose={() => setIsChannelModalOpen(false)}
-                />
+              <CreateChannelForm
+                workspaceId={activeWorkspaceId}
+                onSuccess={(newChannel: any) => {
+                  setChannels(prev => [...prev, newChannel]);
+                  setIsChannelModalOpen(false);
+                }}
+                onClose={() => setIsChannelModalOpen(false)}
+              />
             </motion.div>
           </div>
         )}
       </AnimatePresence>
- 
-       {/* ─── DELETE WORKSPACE MODAL ─── */}
-       <AnimatePresence>
-         {isDeleteModalOpen && (
-           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-             <motion.div 
-               initial={{ opacity: 0 }}
-               animate={{ opacity: 1 }}
-               exit={{ opacity: 0 }}
-               onClick={() => setIsDeleteModalOpen(false)}
-               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-             />
-             <motion.div 
-               initial={{ opacity: 0, scale: 0.97, y: 12 }}
-               animate={{ opacity: 1, scale: 1, y: 0 }}
-               exit={{ opacity: 0, scale: 0.97, y: 12 }}
-               transition={{ duration: 0.2, ease: 'easeOut' }}
-               className="relative w-full max-w-[420px] bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-0 shadow-2xl overflow-hidden"
-             >
-               <div className="h-[2px] bg-red-500/50" />
-               <div className="p-8">
-                 <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-red-500/20">
-                   <Trash2 className="w-8 h-8 text-red-500" />
-                 </div>
-                 <h2 className="text-2xl font-bold text-white text-center mb-2 tracking-tight">Delete Workspace?</h2>
-                 <p className="text-slate-400 text-center mb-8 text-sm leading-relaxed">
-                   This will permanently delete <span className="text-white font-semibold">"{displayName}"</span> and all its channels. This action cannot be undone.
-                 </p>
-                 <div className="flex flex-col gap-3">
-                   <button 
-                     onClick={handleDeleteWorkspace}
-                     disabled={isDeleting}
-                     className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-md transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-900/20"
-                   >
-                     {isDeleting ? (
-                       <Loader2 className="w-4 h-4 animate-spin" />
-                     ) : (
-                       "Delete Permanently"
-                     )}
-                   </button>
-                   <button 
-                     onClick={() => setIsDeleteModalOpen(false)}
-                     disabled={isDeleting}
-                     className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-medium rounded-md border border-white/10 transition-all"
-                   >
-                     Cancel
-                   </button>
-                 </div>
-               </div>
-             </motion.div>
-           </div>
-         )}
-       </AnimatePresence>
 
-      {/* ─── INNER LEFT SIDEBAR (CHANNELS) ─── */}
-      <aside className="w-60 bg-[#0a0a0a] border-r border-slate-800/60 flex flex-col shrink-0 z-10 hidden md:flex">
-          
+      {/* ─── DELETE WORKSPACE MODAL ─── */}
+      <AnimatePresence>
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: 12 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="relative w-full max-w-[420px] bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-0 shadow-2xl overflow-hidden"
+            >
+              <div className="h-[2px] bg-red-500/50" />
+              <div className="p-8">
+                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-red-500/20">
+                  <Trash2 className="w-8 h-8 text-red-500" />
+                </div>
+                <h2 className="text-2xl font-bold text-white text-center mb-2 tracking-tight">Delete Workspace?</h2>
+                <p className="text-slate-400 text-center mb-8 text-sm leading-relaxed">
+                  This will permanently delete <span className="text-white font-semibold">"{displayName}"</span> and all its channels. This action cannot be undone.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={handleDeleteWorkspace}
+                    disabled={isDeleting}
+                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-md transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-900/20"
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Delete Permanently"
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setIsDeleteModalOpen(false)}
+                    disabled={isDeleting}
+                    className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-medium rounded-md border border-white/10 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── INNER SIDEBAR (CHANNELS) ─── */}
+      {activeWorkspaceId && (
+        <aside className={`absolute md:relative z-[45] md:z-10 h-full w-64 left-20 md:left-0 bg-black/40 backdrop-blur-xl border-r border-slate-800/60 flex flex-col py-4 shrink-0 transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-[200%] md:translate-x-0'}`}>
+
           {/* Workspace Header */}
           <div className="h-16 border-b border-slate-800/60 flex items-center px-4 hover:bg-slate-900/40 cursor-pointer transition-all shrink-0">
             <span className="font-semibold text-slate-100 truncate text-lg">{displayName}</span>
@@ -310,25 +364,25 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
           {/* Channel Categories */}
           <nav className="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar">
             <div className="flex flex-col items-center justify-center mb-6 mt-4 px-4">
-               <div className="flex items-center justify-center gap-3 mb-3">
-                 {isOrgFounder && (
-                   <button 
-                     onClick={() => setIsDeleteModalOpen(true)}
-                     className="flex items-center justify-center w-9 h-9 rounded-lg bg-red-500/5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/20 group"
-                     title="Delete Workspace"
-                   >
-                     <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                   </button>
-                 )}
-                 <button 
+              <div className="flex items-center justify-center gap-3 mb-3">
+                {isOrgFounder && (
+                  <button
+                    onClick={() => setIsDeleteModalOpen(true)}
+                    className="flex items-center justify-center w-9 h-9 rounded-lg bg-red-500/5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/20 group"
+                    title="Delete Workspace"
+                  >
+                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                  </button>
+                )}
+                <button
                   onClick={() => setIsChannelModalOpen(true)}
                   className="flex items-center justify-center w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/5 hover:border-white/20 group"
                   title="Create Channel"
-                 >
-                   <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                 </button>
-               </div>
-               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.25em] select-none">Channels</span>
+                >
+                  <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                </button>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.25em] select-none">Channels</span>
             </div>
 
             {isChannelsLoading ? (
@@ -337,11 +391,11 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               </div>
             ) : channels.length > 0 ? (
               channels.map(channel => {
-                const Icon = channel.type === 'VOICE' ? Mic : 
-                            channel.type === 'VIDEO' ? Video :
-                            channel.type === 'AUDIO' ? Music : Hash;
+                const Icon = channel.type === 'VOICE' ? Mic :
+                  channel.type === 'VIDEO' ? Video :
+                    channel.type === 'AUDIO' ? Music : Hash;
                 return (
-                  <Link key={channel._id || channel.id} href={`/workspace/${activeWorkspaceId}/channel/${channel._id || channel.id}`}>
+                  <Link key={channel._id || channel.id} href={`/workspace/${activeWorkspaceId}/channel/${channel._id || channel.id}`} onClick={() => setIsMobileMenuOpen(false)}>
                     <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-colors cursor-pointer">
                       <Icon className="w-4 h-4 shrink-0" />
                       <span className="text-sm font-medium truncate">{channel.name}</span>
@@ -357,49 +411,50 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
             )}
           </nav>
 
-          {/* User Profile Bar */}
-          <div className="h-14 bg-black p-2 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2 px-2 py-1 hover:bg-white/5 rounded-md cursor-pointer w-full transition-colors">
-              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                 <span className="text-white text-xs font-bold">{user?.name?.charAt(0).toUpperCase() || "U"}</span>
-              </div>
-              <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-sm font-semibold text-white truncate leading-tight">{user?.name || "Username"}</span>
-                <span className="text-[11px] text-slate-400 leading-tight">#{user?.username || "1337"}</span>
-              </div>
-            </div>
-            <button className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-white/5 rounded-md transition-colors">
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
         </aside>
+      )}
 
       {/* ─── MAIN CONTENT ─── */}
-      <main className="flex-1 flex flex-col min-w-0 bg-black relative">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 blur-[120px] pointer-events-none"></div>
-        
-        {/* Channel Header */}
-        <header className="h-16 border-b border-slate-800/60 flex items-center justify-between px-6 bg-black/80 backdrop-blur-md z-20 shrink-0 shadow-sm">
-            <div className="flex items-center gap-2">
-              {/* Optional: Add channel specific name here later */}
-            </div>
+      <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10">
 
-            <div className="flex items-center gap-4">
-              <div className="hidden lg:flex items-center bg-[#111] border border-slate-800 rounded-md px-3 py-1.5 w-64 focus-within:border-white/20 transition-all shadow-inner">
-                <input type="text" placeholder="Search" className="bg-transparent border-none outline-none text-sm text-slate-200 w-full" />
-                <Search className="h-4 w-4 text-slate-500 ml-2" />
-              </div>
-              <button className="text-slate-400 hover:text-white transition-all">
-                <Bell className="h-5 w-5" />
-              </button>
-              <button className="text-slate-400 hover:text-white transition-all">
-                <User className="h-5 w-5" />
-              </button>
+        {/* Channel Header */}
+        <header className="h-16 border-b border-slate-800/60 flex items-center justify-between px-4 md:px-6 bg-black/70 backdrop-blur-xl z-20 shrink-0 shadow-sm relative">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-2 -ml-2 text-slate-400 hover:text-white rounded-lg bg-white/5 border border-white/5 active:bg-white/10 transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            {/* Optional: Add channel specific name here later */}
+          </div>
+
+          <div className="flex items-center gap-5">
+            <div className="hidden lg:flex items-center bg-black/60 backdrop-blur-xl border border-white/5 rounded-full px-4 py-1.5 w-72 focus-within:border-indigo-500/50 focus-within:bg-[#111] focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all shadow-inner group">
+              <Search className="h-4 w-4 text-slate-500 mr-2 group-focus-within:text-indigo-400 transition-colors" />
+              <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-slate-200 w-full placeholder:text-slate-600" />
             </div>
-          </header>
+            <button className="relative w-9 h-9 flex items-center justify-center rounded-full bg-slate-900/80 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all">
+              <Bell className="h-4 w-4" />
+              <span className="absolute top-2 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(244,63,94,0.8)]"></span>
+            </button>
+            <div className="flex items-center gap-3 pl-3 border-l border-white/10 cursor-pointer group">
+              <div className="relative">
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="Profile" className="w-9 h-9 rounded-full object-cover shrink-0 border-2 border-[#0a0a0a] group-hover:border-indigo-500/50 transition-all shadow-sm" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shrink-0 border-2 border-[#0a0a0a] group-hover:border-indigo-500/50 transition-all shadow-sm">
+                    <span className="text-white text-sm font-bold leading-none">{user?.name ? user.name.charAt(0).toUpperCase() : "U"}</span>
+                  </div>
+                )}
+                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-[#000] rounded-full"></div>
+              </div>
+            </div>
+          </div>
+        </header>
 
         {/* Page Content passed below */}
-        <div className="flex-1 overflow-auto relative z-10 custom-scrollbar flex flex-col bg-black">
+        <div className="flex-1 overflow-auto relative z-10 custom-scrollbar flex flex-col bg-transparent">
           {children}
         </div>
       </main>
@@ -407,10 +462,10 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   );
 }
 
-function CreateWorkspaceForm({ 
-  onSuccess, 
-  onClose 
-}: { 
+function CreateWorkspaceForm({
+  onSuccess,
+  onClose
+}: {
   onSuccess: (user: IUserSafe) => void;
   onClose: () => void;
 }) {
@@ -444,8 +499,8 @@ function CreateWorkspaceForm({
       // 1. Create Workspace
       // Use the first organization where the user is an admin
       const orgAdmin = user?.organizations?.find(o => o.role === 'admin');
-      
-      const wsRes = await WorkspaceService.createWorkspace({ 
+
+      const wsRes = await WorkspaceService.createWorkspace({
         name,
         orgId: orgAdmin?.orgId
       });
@@ -461,7 +516,7 @@ function CreateWorkspaceForm({
       });
 
       setCreatedInvite(inviteRes.data.data.invite.code);
-      
+
       // 3. Refresh user data to get the new workspace in the sidebar
       const userRes = await api.get('/auth/me');
       onSuccess(userRes.data.data.user);
@@ -483,29 +538,29 @@ function CreateWorkspaceForm({
     return (
       <div className="p-8 space-y-6">
         <div className="flex flex-col items-center justify-center pt-2">
-            <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center mb-6">
-                <Check className="w-8 h-8 text-white" />
-            </div>
-            <h2 className="text-2xl font-semibold text-white mb-2">Space Launched!</h2>
-            <p className="text-slate-400 text-center text-sm px-4">Your new workspace is ready. Use this invite code to bring in your team.</p>
+          <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center mb-6">
+            <Check className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-2xl font-semibold text-white mb-2">Space Launched!</h2>
+          <p className="text-slate-400 text-center text-sm px-4">Your new workspace is ready. Use this invite code to bring in your team.</p>
         </div>
 
         <div className="mt-8 flex items-center gap-2 p-3 bg-white/5 border border-white/10 rounded-xl justify-between group/code transition-all hover:border-white/20">
-            <div className="flex flex-col">
-                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold ml-1 mb-1">Invite Code</span>
-                <code className="text-2xl font-mono font-bold text-white px-1 tracking-wider">
-                    {createdInvite}
-                </code>
-            </div>
-            <button 
-              onClick={copyToClipboard}
-              className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all border border-white/10 group-hover/code:scale-105 active:scale-95"
-            >
-              {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-            </button>
+          <div className="flex flex-col">
+            <span className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold ml-1 mb-1">Invite Code</span>
+            <code className="text-2xl font-mono font-bold text-white px-1 tracking-wider">
+              {createdInvite}
+            </code>
+          </div>
+          <button
+            onClick={copyToClipboard}
+            className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all border border-white/10 group-hover/code:scale-105 active:scale-95"
+          >
+            {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+          </button>
         </div>
 
-        <button 
+        <button
           onClick={() => {
             if (newWorkspaceId) {
               router.push(`/workspace/${newWorkspaceId}`);
@@ -524,81 +579,81 @@ function CreateWorkspaceForm({
 
   return (
     <div className="p-8 relative">
-        <button 
-          onClick={onClose}
-          className="absolute top-6 right-6 p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded-md transition-all z-20"
-        >
-          <X className="w-4 h-4" />
-        </button>
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded-md transition-all z-20"
+      >
+        <X className="w-4 h-4" />
+      </button>
 
-        <div className="flex flex-col items-center justify-center mb-8 text-center pt-4">
-            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10 relative group">
-                <Building2 className="w-6 h-6 text-white relative z-10" />
-            </div>
-            <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Launch Your Space</h2>
-            <p className="text-slate-400 text-sm max-w-[280px]">Establish your team's headquarters on SYNQ.</p>
+      <div className="flex flex-col items-center justify-center mb-8 text-center pt-4">
+        <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10 relative group">
+          <Building2 className="w-6 h-6 text-white relative z-10" />
+        </div>
+        <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Launch Your Space</h2>
+        <p className="text-slate-400 text-sm max-w-[280px]">Establish your team's headquarters on SYNQ.</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm animate-shake">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-300 block mb-1">Workspace Name</label>
+          <div className="relative group">
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Galaxy Design"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all text-sm text-white placeholder:text-slate-500"
+            />
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm animate-shake">
-              {error}
-            </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-300 block mb-1">Workspace Slug</label>
+          <div className="relative group flex items-center">
+            <div className="absolute left-3 text-slate-500 font-medium pointer-events-none select-none text-sm border-r border-white/10 pr-2 py-1">synq.com/</div>
+            <input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="galaxy"
+              className="w-full pl-[95px] px-3 py-2 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all text-sm text-white placeholder:text-slate-500"
+            />
+          </div>
+        </div>
+
+        <button
+          disabled={isLoading || !name.trim()}
+          className="w-full py-2.5 mt-2 rounded-md bg-white text-black font-medium text-sm hover:bg-slate-200 transition-colors shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
+            <>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full"
+              />
+              <span>Launching...</span>
+            </>
+          ) : (
+            "Initialize Workspace"
           )}
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-300 block mb-1">Workspace Name</label>
-            <div className="relative group">
-              <input 
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Galaxy Design"
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all text-sm text-white placeholder:text-slate-500"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-300 block mb-1">Workspace Slug</label>
-            <div className="relative group flex items-center">
-              <div className="absolute left-3 text-slate-500 font-medium pointer-events-none select-none text-sm border-r border-white/10 pr-2 py-1">synq.com/</div>
-              <input 
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder="galaxy"
-                className="w-full pl-[95px] px-3 py-2 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all text-sm text-white placeholder:text-slate-500"
-              />
-            </div>
-          </div>
-
-          <button 
-            disabled={isLoading || !name.trim()}
-            className="w-full py-2.5 mt-2 rounded-md bg-white text-black font-medium text-sm hover:bg-slate-200 transition-colors shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-                <>
-                    <motion.div 
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full"
-                    />
-                    <span>Launching...</span>
-                </>
-            ) : (
-                "Initialize Workspace"
-            )}
-          </button>
-        </form>
+        </button>
+      </form>
     </div>
   );
 }
 
-function CreateChannelForm({ 
+function CreateChannelForm({
   workspaceId,
-  onSuccess, 
-  onClose 
-}: { 
+  onSuccess,
+  onClose
+}: {
   workspaceId: string;
   onSuccess: (channel: any) => void;
   onClose: () => void;
@@ -638,96 +693,95 @@ function CreateChannelForm({
 
   return (
     <div className="p-8 relative">
-        <button 
-          onClick={onClose}
-          className="absolute top-6 right-6 p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded-md transition-all z-20"
-        >
-          <X className="w-4 h-4" />
-        </button>
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded-md transition-all z-20"
+      >
+        <X className="w-4 h-4" />
+      </button>
 
-        <div className="flex flex-col items-center justify-center mb-8 text-center pt-4">
-            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10 relative group">
-                {type === 'TEXT' && <Hash className="w-6 h-6 text-white relative z-10" />}
-                {type === 'VOICE' && <Mic className="w-6 h-6 text-white relative z-10" />}
-                {type === 'AUDIO' && <Music className="w-6 h-6 text-white relative z-10" />}
-                {type === 'VIDEO' && <Video className="w-6 h-6 text-white relative z-10" />}
-            </div>
-            <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Create Channel</h2>
-            <p className="text-slate-400 text-sm max-w-[280px]">Set up a new space for your team to connect.</p>
+      <div className="flex flex-col items-center justify-center mb-8 text-center pt-4">
+        <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10 relative group">
+          {type === 'TEXT' && <Hash className="w-6 h-6 text-white relative z-10" />}
+          {type === 'VOICE' && <Mic className="w-6 h-6 text-white relative z-10" />}
+          {type === 'AUDIO' && <Music className="w-6 h-6 text-white relative z-10" />}
+          {type === 'VIDEO' && <Video className="w-6 h-6 text-white relative z-10" />}
+        </div>
+        <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Create Channel</h2>
+        <p className="text-slate-400 text-sm max-w-[280px]">Set up a new space for your team to connect.</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm animate-shake">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Channel Type</label>
+          <div className="grid grid-cols-1 gap-2">
+            {channelTypes.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setType(t.id as any)}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${type === t.id
+                  ? 'bg-white/10 border-white/20 text-white'
+                  : 'bg-transparent border-white/5 text-slate-400 hover:bg-white/5 hover:border-white/10'
+                  }`}
+              >
+                <div className={`p-2 rounded-lg ${type === t.id ? 'bg-white/10' : 'bg-white/5'}`}>
+                  <t.icon className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold">{t.label}</div>
+                  <div className="text-[11px] opacity-60">{t.desc}</div>
+                </div>
+                {type === t.id && (
+                  <div className="ml-auto w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-black" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm animate-shake">
-              {error}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-300 block mb-1">Channel Name</label>
+          <div className="relative group flex items-center">
+            <div className="absolute left-3 text-slate-500 font-medium pointer-events-none select-none text-sm border-r border-white/10 pr-2 py-1">
+              {type === 'TEXT' ? '#' : <Volume2 className="w-3.5 h-3.5" />}
             </div>
-          )}
-
-          <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Channel Type</label>
-            <div className="grid grid-cols-1 gap-2">
-              {channelTypes.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setType(t.id as any)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                    type === t.id 
-                    ? 'bg-white/10 border-white/20 text-white' 
-                    : 'bg-transparent border-white/5 text-slate-400 hover:bg-white/5 hover:border-white/10'
-                  }`}
-                >
-                  <div className={`p-2 rounded-lg ${type === t.id ? 'bg-white/10' : 'bg-white/5'}`}>
-                    <t.icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold">{t.label}</div>
-                    <div className="text-[11px] opacity-60">{t.desc}</div>
-                  </div>
-                  {type === t.id && (
-                    <div className="ml-auto w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 text-black" />
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="new-channel"
+              className="w-full pl-[40px] px-3 py-2 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all text-sm text-white placeholder:text-slate-500"
+            />
           </div>
+        </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-300 block mb-1">Channel Name</label>
-            <div className="relative group flex items-center">
-              <div className="absolute left-3 text-slate-500 font-medium pointer-events-none select-none text-sm border-r border-white/10 pr-2 py-1">
-                {type === 'TEXT' ? '#' : <Volume2 className="w-3.5 h-3.5" />}
-              </div>
-              <input 
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="new-channel"
-                className="w-full pl-[40px] px-3 py-2 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all text-sm text-white placeholder:text-slate-500"
+        <button
+          disabled={isLoading || !name.trim()}
+          className="w-full py-2.5 mt-2 rounded-md bg-white text-black font-medium text-sm hover:bg-slate-200 transition-colors shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
+            <>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full"
               />
-            </div>
-          </div>
-
-          <button 
-            disabled={isLoading || !name.trim()}
-            className="w-full py-2.5 mt-2 rounded-md bg-white text-black font-medium text-sm hover:bg-slate-200 transition-colors shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-                <>
-                    <motion.div 
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full"
-                    />
-                    <span>Creating...</span>
-                </>
-            ) : (
-                "Create Channel"
-            )}
-          </button>
-        </form>
+              <span>Creating...</span>
+            </>
+          ) : (
+            "Create Channel"
+          )}
+        </button>
+      </form>
     </div>
   );
-}
+}
