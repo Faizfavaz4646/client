@@ -1,10 +1,5 @@
 import { api } from "../api";
-
-export interface CreateWorkspacePayload {
-  name: string;
-  description?: string;
-  orgId?: string;
-}
+import type { CreateWorkspacePayload } from "@/types/workspace";
 
 export const WorkspaceService = {
   // 1. Create a new workspace (Org Founder only)
