@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 export default function WorkspaceSetupPage() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
-  
+
   const [name, setName] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -20,10 +20,11 @@ export default function WorkspaceSetupPage() {
 
   // If user somehow gets here but already has workspaces, redirect
   React.useEffect(() => {
-    if (user && user.workspaces && user.workspaces.length > 0) {
+    // Only redirect if they haven't just successfully created a workspace right now
+    if (user && user.workspaces && user.workspaces.length > 0 && !createdInvite) {
       router.push(`/workspace/${user.workspaces[0].workspaceId}`);
     }
-  }, [user, router]);
+  }, [user, router, createdInvite]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,24 +35,26 @@ export default function WorkspaceSetupPage() {
       setError(null);
 
       // 1. Create Workspace
-      const wsRes = await WorkspaceService.createWorkspace({ 
+      const orgAdmin = user?.organizations?.find((o: any) => o.role === 'admin' || o.role === 'owner');
+
+      const wsRes = await WorkspaceService.createWorkspace({
         name,
-        orgId: user?.id 
+        orgId: orgAdmin?.orgId
       });
-      
+
       const workspaceData = wsRes.data;
       const workspaceId = workspaceData._id;
 
       // 2. Generate Invite Code for this workspace
       const inviteRes = await api.post('/invites', {
-        organizationId: workspaceData.orgId,
+        organizationId: workspaceData.orgId || orgAdmin?.orgId,
         workspaceId: workspaceId,
         expiresInHours: 168, // 1 week
         maxUses: 100
       });
 
       setCreatedInvite(inviteRes.data.data.invite.code);
-      
+
       // 3. Refresh user data 
       const userRes = await api.get('/auth/me');
       setUser(userRes.data.data.user);
@@ -71,7 +74,7 @@ export default function WorkspaceSetupPage() {
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen flex flex-col items-center justify-center p-4 relative text-white font-sans overflow-hidden"
       style={{
         backgroundColor: '#090a10',
@@ -88,7 +91,7 @@ export default function WorkspaceSetupPage() {
           <div className="w-5/6 h-10 bg-white/5 rounded-lg border border-white/5"></div>
           <div className="w-full h-10 bg-white/5 rounded-lg border border-white/5"></div>
         </div>
-        
+
         {/* Mock Main Dashboard Area */}
         <div className="flex-1 p-12 flex flex-col gap-8 blur-[2px]">
           <div className="flex justify-between items-center mb-4">
@@ -106,11 +109,11 @@ export default function WorkspaceSetupPage() {
       </div>
 
       {/* Main Centered Container - True Frosted Glass / Fog Touch */}
-      <div 
+      <div
         className="relative z-10 w-full max-w-[520px] rounded-[28px] p-10 sm:p-14"
         style={{
           /* The fog mix: a transparent dark base + subtle diagonal white sheen */
-          backgroundColor: 'rgba(15, 17, 26, 0.45)', 
+          backgroundColor: 'rgba(15, 17, 26, 0.45)',
           background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.0) 100%)',
           backdropFilter: 'blur(32px)',
           WebkitBackdropFilter: 'blur(32px)',
@@ -123,7 +126,7 @@ export default function WorkspaceSetupPage() {
       >
         <AnimatePresence mode="wait">
           {!createdInvite ? (
-            <motion.div 
+            <motion.div
               key="setup-form"
               initial={{ opacity: 0, y: 20, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -154,7 +157,7 @@ export default function WorkspaceSetupPage() {
                 <div className="space-y-2 relative">
                   <label className="text-[13px] font-medium text-[#8b949e] block pl-1">Workspace Name</label>
                   <div className="relative">
-                    <input 
+                    <input
                       autoFocus
                       value={name}
                       onChange={(e) => setName(e.target.value)}
@@ -165,7 +168,7 @@ export default function WorkspaceSetupPage() {
                   </div>
                 </div>
 
-                <button 
+                <button
                   disabled={isLoading || !name.trim()}
                   className="w-full py-4 mt-2 rounded-xl text-white font-semibold text-[16px] transition-all duration-300 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
@@ -200,7 +203,7 @@ export default function WorkspaceSetupPage() {
               </form>
             </motion.div>
           ) : (
-            <motion.div 
+            <motion.div
               key="setup-success"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -215,36 +218,36 @@ export default function WorkspaceSetupPage() {
 
                 <h2 className="text-[28px] font-semibold tracking-tight text-white mb-2 leading-tight">Mission Accomplished</h2>
                 <p className="text-[15px] text-[#8b949e]">
-                  <span className="text-white font-medium">{name}</span> is online.<br/>Share this code with your team.
+                  <span className="text-white font-medium">{name}</span> is online.<br />Share this code with your team.
                 </p>
               </div>
 
-               <div className="w-full space-y-2 mb-10">
-                 <label className="text-[13px] font-medium text-[#8b949e] block text-center">Invite Code</label>
-                 <div className="flex flex-col sm:flex-row gap-3">
-                   <div className="flex-1 px-4 py-3 bg-black/40 border border-white/10 rounded-xl flex items-center justify-center overflow-hidden">
-                     <code className="font-mono tracking-[0.2em] text-[22px] font-medium text-white drop-shadow-[0_0_8px_rgba(0,210,255,0.4)] truncate">
-                       {createdInvite}
-                     </code>
-                   </div>
-                   <button 
-                     onClick={copyToClipboard}
-                     className="px-6 py-4 border border-white/10 bg-white/5 text-[#8b949e] hover:text-white hover:bg-white/10 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group"
-                     title="Copy code"
-                   >
-                     {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5 group-hover:scale-110 transition-transform" />}
-                     <span className="sm:hidden">{copied ? "Copied" : "Copy Code"}</span>
-                   </button>
-                 </div>
+              <div className="w-full space-y-2 mb-10">
+                <label className="text-[13px] font-medium text-[#8b949e] block text-center">Invite Code</label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 px-4 py-3 bg-black/40 border border-white/10 rounded-xl flex items-center justify-center overflow-hidden">
+                    <code className="font-mono tracking-[0.2em] text-[22px] font-medium text-white drop-shadow-[0_0_8px_rgba(0,210,255,0.4)] truncate">
+                      {createdInvite}
+                    </code>
+                  </div>
+                  <button
+                    onClick={copyToClipboard}
+                    className="px-6 py-4 border border-white/10 bg-white/5 text-[#8b949e] hover:text-white hover:bg-white/10 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group"
+                    title="Copy code"
+                  >
+                    {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5 group-hover:scale-110 transition-transform" />}
+                    <span className="sm:hidden">{copied ? "Copied" : "Copy Code"}</span>
+                  </button>
+                </div>
               </div>
 
-              <button 
+              <button
                 onClick={() => {
-                   if (user && user.workspaces && user.workspaces.length > 0) {
-                     router.push(`/workspace/${user.workspaces[0].workspaceId}`);
-                   } else {
-                     window.location.reload();
-                   }
+                  if (user && user.workspaces && user.workspaces.length > 0) {
+                    router.push(`/workspace/${user.workspaces[0].workspaceId}`);
+                  } else {
+                    window.location.reload();
+                  }
                 }}
                 className="w-full py-4 rounded-xl text-white font-semibold text-[16px] transition-all duration-300 flex items-center justify-center"
                 style={{

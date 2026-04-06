@@ -19,4 +19,10 @@ export const OrganizationService = {
     const response = await api.get('/organizations');
     return response.data;
   },
+
+  // 4. Get members of an organization
+  getOrganizationMembers: async (orgId: string) => {
+    const response = await api.get(`/organizations/${orgId}/members`);
+    return response.data;
+  },
 };

@@ -8,8 +8,8 @@ export const InviteService = {
   },
 
   // 2. Join a workspace with invite code (Authenticated)
-  joinWorkspace: async (inviteCode: string, role: string) => {
-    const response = await api.post("/invites/join", { inviteCode, role });
+  joinWorkspace: async (inviteCode: string) => {
+    const response = await api.post("/invites/join", { inviteCode });
     return response.data;
   },
 };

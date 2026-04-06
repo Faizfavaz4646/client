@@ -72,6 +72,13 @@ class SocketService {
       this.socket.on("message-deleted", callback);
     }
   }
+
+  onChannelCreated(callback: (channel: any) => void) {
+    if (this.socket) {
+      this.socket.off("channel-created");
+      this.socket.on("channel-created", callback);
+    }
+  }
 }
 
 // Export a single instance of the service to be shared across your whole app
