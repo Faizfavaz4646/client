@@ -25,6 +25,7 @@ export default function ChannelPage() {
   // Call state tracking
   const [isCallActive, setIsCallActive] = React.useState(false); // Are they currently in the call grid?
   const [isCallOngoing, setIsCallOngoing] = React.useState(false); // Is there an active call happening in this channel?
+  const [isAudioOnlyMode, setIsAudioOnlyMode] = React.useState(false);
   const [isCheckingCall, setIsCheckingCall] = React.useState(true); // Loading state for backend response
   const [bannerState, setBannerState] = React.useState<'visible' | 'hidden' | 'rejected'>('visible'); // Banner display state
   
@@ -99,6 +100,18 @@ export default function ChannelPage() {
         if (!data.isOngoing) {
           setIsCallActive(false);
           setBannerState('visible'); // Reset banner for next time
+          setIsAudioOnlyMode(false); // Reset mode for next time
+        }
+      }
+    });
+
+    // Listen for Ghost Messages to sync the call type (Audio vs Video)
+    socket.on("new-message", (msg: { channelId: string, content: string }) => {
+      if (msg.channelId === channelId) {
+        if (msg.content === "@@SYSTEM_CALL_TYPE:AUDIO") {
+          setIsAudioOnlyMode(true);
+        } else if (msg.content === "@@SYSTEM_CALL_TYPE:VIDEO") {
+          setIsAudioOnlyMode(false);
         }
       }
     });
@@ -106,6 +119,7 @@ export default function ChannelPage() {
     return () => {
       socket.off("webrtc:call-status-response");
       socket.off("webrtc:call-status-changed");
+      socket.off("new-message");
     };
   }, [channelId, channel?.type]);
 
@@ -153,14 +167,19 @@ export default function ChannelPage() {
                 <Phone className="w-5 h-5 text-emerald-400 animate-pulse" />
               </div>
               <div className="flex flex-col mr-2">
-                <span className="text-sm font-bold leading-tight">Incoming Channel Call...</span>
+                <span className="text-sm font-bold leading-tight">
+                  Incoming {isAudioOnlyMode ? "Audio" : "Video"} Call...
+                </span>
                 <span className="text-[11px] text-slate-400 leading-tight">from #{channel.name}</span>
               </div>
             </div>
             
             <div className="flex items-center gap-2 border-l border-white/10 pl-4">
               <button 
-                onClick={() => setIsCallActive(true)}
+                onClick={() => {
+                  // Explicitly join as the detected type (Audio vs Video)
+                  setIsCallActive(true);
+                }}
                 title="Join Call"
                 className="w-10 h-10 flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-white rounded-full shadow-lg shadow-emerald-500/30 transition-all active:scale-95 group"
               >
@@ -223,7 +242,12 @@ export default function ChannelPage() {
             {isPrivileged ? (
               <div className="flex items-center gap-1 bg-white/5 border border-white/5 rounded-lg p-1">
                 <button 
-                  onClick={() => { setIsCallOngoing(true); setIsCallActive(true); }}
+                  onClick={() => { 
+                    socketService.sendMessage(channelId as string, "@@SYSTEM_CALL_TYPE:VIDEO");
+                    setIsAudioOnlyMode(false); 
+                    setIsCallOngoing(true); 
+                    setIsCallActive(true); 
+                  }}
                   className={`p-1.5 rounded-md transition-all group relative ${isCallOngoing ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
                 >
                   <Video className="w-4 h-4" />
@@ -232,7 +256,12 @@ export default function ChannelPage() {
                   </span>
                 </button>
                 <button 
-                  onClick={() => { setIsCallOngoing(true); setIsCallActive(true); }}
+                  onClick={() => { 
+                    socketService.sendMessage(channelId as string, "@@SYSTEM_CALL_TYPE:AUDIO");
+                    setIsAudioOnlyMode(true); 
+                    setIsCallOngoing(true); 
+                    setIsCallActive(true); 
+                  }}
                   className={`p-1.5 rounded-md transition-all group relative ${isCallOngoing ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
                 >
                   <Phone className="w-4 h-4" />
@@ -281,7 +310,7 @@ export default function ChannelPage() {
             </div>
             {/* Push down CallRoom slightly to account for the new header */}
             <div className="flex-1 mt-14 relative h-[calc(100%-3.5rem)]">
-               <CallRoom channelId={channelId as string} />
+               <CallRoom channelId={channelId as string} isAudioOnly={isAudioOnlyMode} channel={channel} onClose={() => setIsCallActive(false)} />
             </div>
           </motion.div>
         )}

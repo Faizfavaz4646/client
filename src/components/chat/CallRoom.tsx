@@ -1,30 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation"; 
 import { webrtcService } from "@/lib/services/webrtc.service";
 import VideoPlayer from "./VideoPlayer";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, AlertCircle } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, AlertCircle, MonitorUp, MonitorOff } from "lucide-react";
 import { CallRoomProps } from "@/types/call.types";
+import { useAuthStore } from "@/store/authStore";
 
-export default function CallRoom({ channelId }: CallRoomProps) {
-  const router = useRouter();
+
+export default function CallRoom({ channelId, isAudioOnly, channel, onClose }: CallRoomProps) {
+  const user = useAuthStore((state) => state.user);
+  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
+
   
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
-  
-  const [isVideoOn, setIsVideoOn] = useState(true);
+  const [isVideoOn, setIsVideoOn] = useState(!isAudioOnly);
   const [isMicOn, setIsMicOn] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [participants, setParticipants] = useState<any>(new Map());
+
+  useEffect(() => {
+    // Sync local state if isAudioOnly prop changes (e.g. late sync)
+    setIsVideoOn(!isAudioOnly);
+  }, [isAudioOnly]);
 
   useEffect(() => {
     let mounted = true;
 
     const initializeCall = async () => {
       try {
-        // 1. Ask for Camera/Mic permissions
+        // 1. Ask for Camera/Mic permissions (Always ask so user CAN toggle it on later)
         const stream = await webrtcService.startLocalMedia(true, true);
+        
+        // 2. If it's an Audio call, immediately mute the video track
+        if (isAudioOnly) {
+          webrtcService.toggleMedia('video', false);
+        }
         
         // Safety check: if user left the page before clicking "Allow", stop the camera immediately
         if (!mounted) {
@@ -34,7 +49,7 @@ export default function CallRoom({ channelId }: CallRoomProps) {
         
         setLocalStream(stream);
         
-        // 2. Join the signaling room
+        // 3. Join the signaling room
         webrtcService.joinCall(channelId);
         setHasJoined(true);
 
@@ -66,9 +81,21 @@ export default function CallRoom({ channelId }: CallRoomProps) {
       });
     };
 
-    // 5. Cleanup when unmounting (leaving the page)
+    // 5. If forced close signal from owner
+    webrtcService.onCallForcedEnd = () => {
+      onClose?.();
+    };
+
+    // 6. Listen for Participant Metadata (User ID + Media State changes)
+    webrtcService.onParticipantMetadataUpdate = (newParticipants) => {
+      if (mounted) setParticipants(newParticipants);
+    };
+
+    // 7. Cleanup when unmounting (leaving the page)
     return () => {
       mounted = false;
+      webrtcService.onCallForcedEnd = null;
+      webrtcService.onParticipantMetadataUpdate = null;
       webrtcService.leaveCall();
       setLocalStream(null);
       setRemoteStreams(new Map());
@@ -87,9 +114,30 @@ export default function CallRoom({ channelId }: CallRoomProps) {
     setIsMicOn(!isMicOn);
   };
 
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      webrtcService.stopScreenShare();
+      setIsScreenSharing(false);
+    } else {
+      const stream = await webrtcService.startScreenShare();
+      if (stream) {
+        setIsScreenSharing(true);
+        // Keep state synced if user stops sharing via browser's native completely native popup stop button
+        stream.getVideoTracks()[0].addEventListener('ended', () => {
+          webrtcService.stopScreenShare();
+          setIsScreenSharing(false);
+        });
+      }
+    }
+  };
+
   const handleLeaveCall = () => {
-    webrtcService.leaveCall();
-    router.back(); // Smoothly takes the user back to the previous screen!
+    if (isPrivileged) {
+      webrtcService.forceEndCallGlobally();
+    } else {
+      webrtcService.leaveCall();
+    }
+    onClose?.();
   };
 
   // --- Render States ---
@@ -131,13 +179,14 @@ export default function CallRoom({ channelId }: CallRoomProps) {
       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-[minmax(200px,1fr)] max-h-[calc(100%-80px)] overflow-y-auto custom-scrollbar">
         {/* Local User */}
         {localStream && (
-          <VideoPlayer stream={localStream} isLocal={true} />
+          <VideoPlayer stream={localStream} isLocal={true} currentUser={user} isVideoOff={!isVideoOn} />
         )}
 
         {/* Remote Users */}
-        {Array.from(remoteStreams.entries()).map(([socketId, stream]) => (
-          <VideoPlayer key={socketId} stream={stream} isLocal={false} />
-        ))}
+        {Array.from(remoteStreams.entries()).map(([socketId, stream]) => {
+           const pInfo = participants.get(socketId);
+           return <VideoPlayer key={socketId} stream={stream} isLocal={false} participant={pInfo} channel={channel} isVideoOff={pInfo ? !pInfo.cameraEnabled : false} />
+        })}
       </div>
 
       {/* 🎛️ Control Bar (Sits at the bottom) */}
@@ -159,6 +208,15 @@ export default function CallRoom({ channelId }: CallRoomProps) {
           className={`p-3.5 rounded-xl transition-all ${isVideoOn ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-red-500/20 text-red-500 hover:bg-red-500/30'}`}
         >
           {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+        </button>
+
+        {/* Screen Share Toggle */}
+        <button 
+          onClick={toggleScreenShare}
+          title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
+          className={`p-3.5 rounded-xl transition-all ${isScreenSharing ? 'bg-indigo-500 text-white hover:bg-indigo-600 shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+        >
+          {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <MonitorUp className="w-5 h-5" />}
         </button>
 
         <div className="w-px h-8 bg-white/10 mx-2" />

@@ -60,24 +60,20 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
     socketService.connect();
     socketService.joinChannel(channelId);
 
-    // Listen for new messages
-    socketService.onNewMessage((incomingData: Message) => {
+    const newMessageCallback = (incomingData: Message) => {
       console.log("📨 New message arrived!", incomingData);
       setMessages((prev) => {
-        // 1. Prevent exact duplicate IDs from being added (if any)
         if (incomingData._id && prev.some(m => m._id === incomingData._id)) return prev;
-
-        // 2. Identify if this incoming message matches an optimistic message we JUST sent.
         const isOptimisticDupe = prev.some(m => !m._id && m.content === incomingData.content);
-
         if (isOptimisticDupe) {
-          // Replace the optimistic message with the real one from the server (which includes proper DB ID)
           return prev.map(m => (!m._id && m.content === incomingData.content) ? incomingData : m);
         }
-
         return [...prev, incomingData];
       });
-    });
+    };
+
+    // Listen for new messages
+    socketService.onNewMessage(newMessageCallback);
 
     // Listen for real-time edits (if backend decides to broadcast them later)
     socketService.onMessageEdited((updatedMsg: Message) => {
@@ -90,7 +86,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
     });
 
     return () => {
-      socketService.disconnect();
+      socketService.offNewMessage(newMessageCallback);
     };
   }, [channelId, isMounted]); // Add isMounted to dependency array
 
@@ -221,7 +217,10 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
             <p className="text-slate-400 text-center">This is the start of the #{channel?.name || 'general'} channel. Start a conversation or share your media.</p>
           </div>
         ) : (
-          messages.filter(msg => !hiddenMessageIds.includes((msg._id || msg.id) as string)).map((msg, i) => {
+          messages
+            .filter(msg => !hiddenMessageIds.includes((msg._id || msg.id) as string))
+            .filter(msg => !msg.content?.startsWith("@@SYSTEM_CALL_TYPE:"))
+            .map((msg, i) => {
             const senderObj = msg.senderId || (msg as any).sender || {};
             // Deep extract user ID due to backend mapping structure (id vs userId)
             const activeUserId = user?.id || (user as any)?._id || (user as any)?.userId;
