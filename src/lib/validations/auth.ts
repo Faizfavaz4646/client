@@ -25,7 +25,6 @@ export const registerSchema = z.object({
 
 export const joinWorkspaceSchema = z.object({
   inviteCode: z.string().min(1, "Invite code is required"),
-  role: z.string().min(1, "Please select a role"),
 });
 
 export const registerOrgSchema = z.object({
@@ -37,7 +36,6 @@ export const registerOrgSchema = z.object({
     .max(128)
     .regex(PASSWORD_PATTERN, "Must contain uppercase, lowercase, and a number"),
   category: z.string().min(2, "Category is required").max(100),
-  roles: z.array(z.string().min(1).max(50)),
 });
 
 export const forgotPasswordSchema = z.object({

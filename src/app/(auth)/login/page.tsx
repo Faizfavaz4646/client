@@ -166,7 +166,7 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
       setError(null);
       const endpoint = loginMode === "org" ? "/auth/login-org" : "/auth/login";
       const res = await api.post(endpoint, data);
-      
+
       const user = res.data.data.user;
       setUser(user);
 
@@ -177,7 +177,7 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
         router.push(`/workspace/${user.workspaces[0].workspaceId}`);
       } else if (isFounder) {
         // Founder needs to create their first workspace
-        router.push("/workspace/setup"); 
+        router.push("/workspace/setup");
       } else {
         // Regular user needs an invite code
         router.push("/workspace/join");
@@ -209,22 +209,20 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
         <button
           type="button"
           onClick={() => { setLoginMode("user"); setError(null); }}
-          className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-            loginMode === "user"
-              ? "bg-white/10 text-white shadow-sm"
-              : "text-slate-400 hover:text-white hover:bg-white/5"
-          }`}
+          className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${loginMode === "user"
+            ? "bg-white/10 text-white shadow-sm"
+            : "text-slate-400 hover:text-white hover:bg-white/5"
+            }`}
         >
           User Login
         </button>
         <button
           type="button"
           onClick={() => { setLoginMode("org"); setError(null); }}
-          className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-            loginMode === "org"
-              ? "bg-white/10 text-white shadow-sm"
-              : "text-slate-400 hover:text-white hover:bg-white/5"
-          }`}
+          className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${loginMode === "org"
+            ? "bg-white/10 text-white shadow-sm"
+            : "text-slate-400 hover:text-white hover:bg-white/5"
+            }`}
         >
           Workspace Login
         </button>
@@ -587,17 +585,7 @@ function RegisterOrgForm({
     resolver: zodResolver(registerOrgSchema),
     defaultValues: {
       category: DEFAULT_CATEGORIES[0],
-      roles: ["Admin", "Member"],
     },
-  });
-
-  const {
-    fields: roleFields,
-    append: appendRole,
-    remove: removeRole,
-  } = useFieldArray({
-    control,
-    name: "roles" as never,
   });
 
   const onSubmit = async (data: RegisterOrgFormValues) => {
@@ -716,39 +704,6 @@ function RegisterOrgForm({
           </select>
         </div>
 
-        <div className="pt-2 border-t border-white/10">
-          <label className="text-sm font-medium text-slate-300 mb-2 block">Define Roles</label>
-          <div className="space-y-2 mb-2">
-            {roleFields.map((field, index) => (
-              <div key={field.id} className="flex gap-2">
-                <input
-                  {...register(`roles.${index}` as const)}
-                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-white/20 transition-all text-sm text-white"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeRole(index)}
-                  className="px-3 py-2 border border-white/10 text-slate-400 rounded-md hover:bg-white/10 hover:text-red-400 transition-colors"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => appendRole("")}
-            className="text-xs font-medium text-white hover:underline flex items-center gap-1"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14" /><path d="M12 5v14" />
-            </svg>
-            Add role
-          </button>
-        </div>
-
         <button
           disabled={isSubmitting}
           className="w-full py-2.5 mt-4 rounded-md bg-white text-black font-medium text-sm hover:bg-slate-200 transition-colors shadow-sm disabled:opacity-60"
@@ -756,6 +711,6 @@ function RegisterOrgForm({
           {isSubmitting ? "Registering..." : "Register Workspace"}
         </button>
       </form>
-    </motion.div>
-    );
+    </motion.div >
+  );
 }

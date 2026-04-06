@@ -26,6 +26,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
   const [isMounted, setIsMounted] = useState(false);
 
   const user = useAuthStore((state) => state.user);
+  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
 
   // 2. Tell React when the component has safely mounted in the browser
   useEffect(() => {
@@ -103,6 +104,8 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
     setInputMessage("");
     setPendingFile(null);
 
+    const activeUserId = user?.id || (user as any)?._id || (user as any)?.userId;
+
     // If there's a file WITH OR WITHOUT text, send as ONE message
     if (fileToSend) {
       const tempId = "temp-" + Date.now();
@@ -111,7 +114,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
         content: messageText,
         type: fileToSend.type,
         attachments: [{ url: fileToSend.url, name: fileToSend.file.name, fileType: fileToSend.type }],
-        senderId: { _id: user?.id, id: user?.id, name: user?.name, avatar: user?.avatar },
+        senderId: { _id: activeUserId, id: activeUserId, name: user?.name, avatar: user?.avatar },
         createdAt: new Date().toISOString()
       };
       setMessages(prev => [...prev, optimisticMsg]);
@@ -139,7 +142,8 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
 
     // Only text
     if (messageText.trim()) {
-      const optimisticText: Message = { content: messageText, type: "TEXT", senderId: { _id: user?.id, id: user?.id, name: user?.name, avatar: user?.avatar }, createdAt: new Date().toISOString() };
+      const activeUserId = user?.id || (user as any)?._id || (user as any)?.userId;
+      const optimisticText: Message = { content: messageText, type: "TEXT", senderId: { _id: activeUserId, id: activeUserId, name: user?.name, avatar: user?.avatar }, createdAt: new Date().toISOString() };
       setMessages((prev) => [...prev, optimisticText]);
       socketService.sendMessage(channelId, messageText, "TEXT");
     }
@@ -219,9 +223,15 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
         ) : (
           messages.filter(msg => !hiddenMessageIds.includes((msg._id || msg.id) as string)).map((msg, i) => {
             const senderObj = msg.senderId || (msg as any).sender || {};
-            const isMe = senderObj._id === user?.id || senderObj.id === user?.id || senderObj.name === user?.name;
+            // Deep extract user ID due to backend mapping structure (id vs userId)
+            const activeUserId = user?.id || (user as any)?._id || (user as any)?.userId;
+            const isMe = senderObj._id === activeUserId || senderObj.id === activeUserId || senderObj === activeUserId || msg.senderId === activeUserId;
 
-            let senderName = senderObj.name || senderObj.username || "Unknown";
+            let senderName = senderObj.name || senderObj.username;
+            if (!senderName) {
+              const workspaceName = user?.workspaces?.find(w => w.workspaceId === channel?.workspaceId)?.name;
+              senderName = workspaceName || user?.workspaces?.[0]?.name || "Unknown";
+            }
             if (isMe) senderName = "You";
 
             const initial = senderName.charAt(0).toUpperCase();
@@ -243,7 +253,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                   )}
                   <div className="flex flex-col min-w-0 flex-1 relative">
                     <div className="flex items-baseline gap-2 mb-0.5">
-                      <span className="text-[15px] font-bold text-slate-200 hover:underline cursor-pointer">{senderName}</span>
+                      <span className="text-[15px] font-bold text-slate-200 cursor-default">{senderName}</span>
                       <span className="text-[10px] font-medium text-slate-500">{timeString}</span>
                       {msg.isEdited && <span className="text-[10px] text-slate-500 italic">(edited)</span>}
                     </div>
@@ -263,8 +273,9 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                     ) : (
                       <div className="text-slate-300 text-[15px] leading-relaxed whitespace-pre-wrap">
                         {msg.isDeleted ? (
-                          <div className="italic text-slate-500 text-[14px] flex items-center gap-1.5 bg-[#1a1a1a] px-3 py-2 rounded-lg border border-white/5 w-fit mt-1 shadow-sm">
-                            <span className="text-lg opacity-80">🚫</span> This message was deleted.
+                          <div className="flex items-center gap-1.5 mt-1 text-[13px] text-slate-500/80 italic">
+                            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="opacity-80"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                            <span>This message was deleted</span>
                           </div>
                         ) : msg.type === "IMAGE" ? (
                           <div className="relative group/image mt-1 max-w-xs md:max-w-sm flex flex-col gap-2 bg-[#1a1a1a] p-1.5 rounded-2xl border border-white/5 shadow-sm">
@@ -341,96 +352,117 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
       </div>
 
       <div className="p-4 bg-gradient-to-t from-black/80 to-transparent w-full shrink-0 relative z-20">
-        <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex flex-col bg-black/60 backdrop-blur-xl rounded-2xl border border-white/10 focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/30 transition-all shadow-[0_4px_30px_-5px_rgba(0,0,0,0.5)]">
+        {(() => {
+          const isMember = channel?.name === 'general' || isPrivileged || (channel?.members && channel.members.some((m: any) => m === user?.id || m._id === user?.id || m.userId === user?.id || (m.userId && m.userId._id === user?.id)));
 
-          {/* File Preview Area */}
-          {pendingFile && (
-            <div className="px-4 pt-4 pb-2 flex items-start shrink-0">
-              <div className="relative group/preview inline-block">
-                {pendingFile.type === "IMAGE" ? (
-                  <img src={pendingFile.url} alt="Preview" className="w-20 h-20 object-cover rounded-xl border border-white/10 shadow-md" />
-                ) : (
-                  <div className="w-20 h-20 bg-white/5 rounded-xl border border-white/10 flex items-center justify-center shadow-md">
-                    <FileText className="w-8 h-8 text-slate-400" />
-                  </div>
-                )}
-                <button type="button" onClick={() => setPendingFile(null)} className="absolute -top-2 -right-2 p-1.5 bg-[#2a2a2a] hover:bg-rose-500 text-white rounded-full shadow-lg transition-all border border-white/10 disabled:opacity-50" disabled={isUploading}>
-                  <X className="w-3.5 h-3.5" />
-                </button>
-
-                {isUploading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl backdrop-blur-sm">
-                    <Loader2 className="w-6 h-6 text-white animate-spin" />
-                  </div>
-                )}
+          if (!isMember && channel) {
+            return (
+              <div className="max-w-4xl mx-auto bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shadow-md">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+                <p className="text-sm font-medium text-slate-200">Viewing Only</p>
+                <p className="text-xs text-slate-400 text-center max-w-[300px]">You are currently previewing <span className="text-white font-medium">#{channel?.name}</span>. You must be added by an admin to participate.</p>
               </div>
-            </div>
-          )}
+            );
+          }
 
-          <div className="flex items-end gap-2 p-2 w-full">
-            <div className="flex items-center gap-1 shrink-0 pb-1.5 px-1 relative">
-              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*" />
-              <input type="file" id="cameraInput" onChange={handleFileSelect} className="hidden" accept="image/*;capture=camera" />
-              <input type="file" id="documentInput" onChange={handleFileSelect} className="hidden" accept="*" />
+          return (
+            <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex flex-col bg-black/60 backdrop-blur-xl rounded-2xl border border-white/10 focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/30 transition-all shadow-[0_4px_30px_-5px_rgba(0,0,0,0.5)]">
 
-              <button
-                type="button"
-                onClick={() => setIsAttachmentMenuOpen(!isAttachmentMenuOpen)}
-                disabled={isUploading}
-                className={`p-2 rounded-xl transition-all z-40 ${isAttachmentMenuOpen ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:text-indigo-400 hover:bg-white/5'}`}
-              >
-                <Paperclip className="w-5 h-5 transition-transform" style={{ transform: isAttachmentMenuOpen ? 'rotate(45deg)' : 'rotate(0)' }} />
-              </button>
+              {/* File Preview Area */}
+              {pendingFile && (
+                <div className="px-4 pt-4 pb-2 flex items-start shrink-0">
+                  <div className="relative group/preview inline-block">
+                    {pendingFile.type === "IMAGE" ? (
+                      <img src={pendingFile.url} alt="Preview" className="w-20 h-20 object-cover rounded-xl border border-white/10 shadow-md" />
+                    ) : (
+                      <div className="w-20 h-20 bg-white/5 rounded-xl border border-white/10 flex items-center justify-center shadow-md">
+                        <FileText className="w-8 h-8 text-slate-400" />
+                      </div>
+                    )}
+                    <button type="button" onClick={() => setPendingFile(null)} className="absolute -top-2 -right-2 p-1.5 bg-[#2a2a2a] hover:bg-rose-500 text-white rounded-full shadow-lg transition-all border border-white/10 disabled:opacity-50" disabled={isUploading}>
+                      <X className="w-3.5 h-3.5" />
+                    </button>
 
-              {/* Attachment Pop-Up Menu */}
-              {isAttachmentMenuOpen && (
-                <div className="absolute bottom-full left-0 mb-4 p-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] flex flex-col gap-1 w-44 z-[60] animate-in slide-in-from-bottom-2 duration-200">
-                  <button type="button" onClick={() => { fileInputRef.current?.click(); setIsAttachmentMenuOpen(false) }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/5 rounded-xl transition-colors">
-                    <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg"><ImageIcon className="w-4 h-4" /></div> Photo & Video
-                  </button>
-                  <button type="button" onClick={() => { document.getElementById('cameraInput')?.click(); setIsAttachmentMenuOpen(false) }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/5 rounded-xl transition-colors">
-                    <div className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg"><Camera className="w-4 h-4" /></div> Camera
-                  </button>
-                  <button type="button" onClick={() => { document.getElementById('documentInput')?.click(); setIsAttachmentMenuOpen(false) }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/5 rounded-xl transition-colors">
-                    <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg"><FileText className="w-4 h-4" /></div> Document
-                  </button>
+                    {isUploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl backdrop-blur-sm">
+                        <Loader2 className="w-6 h-6 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* Click away layer to close menu */}
-              {isAttachmentMenuOpen && (
-                <div className="fixed inset-0 z-[50]" onClick={() => setIsAttachmentMenuOpen(false)} />
-              )}
-            </div>
+              <div className="flex items-end gap-2 p-2 w-full">
+                <div className="flex items-center gap-1 shrink-0 pb-1.5 px-1 relative">
+                  <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*" />
+                  <input type="file" id="cameraInput" onChange={handleFileSelect} className="hidden" accept="image/*;capture=camera" />
+                  <input type="file" id="documentInput" onChange={handleFileSelect} className="hidden" accept="*" />
 
-            <textarea
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage(e as any);
-                }
-              }}
-              placeholder="Message #general"
-              className="flex-1 bg-transparent border-none px-2 py-2.5 text-[15px] text-slate-200 focus:outline-none resize-none min-h-[44px] max-h-[200px] custom-scrollbar placeholder:text-slate-500"
-              rows={1}
-            />
+                  <button
+                    type="button"
+                    onClick={() => setIsAttachmentMenuOpen(!isAttachmentMenuOpen)}
+                    disabled={isUploading}
+                    className={`p-2 rounded-xl transition-all z-40 ${isAttachmentMenuOpen ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:text-indigo-400 hover:bg-white/5'}`}
+                  >
+                    <Paperclip className="w-5 h-5 transition-transform" style={{ transform: isAttachmentMenuOpen ? 'rotate(45deg)' : 'rotate(0)' }} />
+                  </button>
 
-            <div className="flex items-center gap-1 shrink-0 pb-1.5 px-1">
-              <button type="button" className="p-2 text-slate-400 hover:text-amber-400 hover:bg-white/5 rounded-xl transition-colors">
-                <Smile className="w-5 h-5" />
-              </button>
-              <button
-                type="submit"
-                disabled={(!inputMessage.trim() && !pendingFile) || isUploading}
-                className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all hover:scale-105 active:scale-95 ml-1 disabled:hover:scale-100"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </form>
+                  {/* Attachment Pop-Up Menu */}
+                  {isAttachmentMenuOpen && (
+                    <div className="absolute bottom-full left-0 mb-4 p-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] flex flex-col gap-1 w-44 z-[60] animate-in slide-in-from-bottom-2 duration-200">
+                      <button type="button" onClick={() => { fileInputRef.current?.click(); setIsAttachmentMenuOpen(false) }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/5 rounded-xl transition-colors">
+                        <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg"><ImageIcon className="w-4 h-4" /></div> Photo & Video
+                      </button>
+                      <button type="button" onClick={() => { document.getElementById('cameraInput')?.click(); setIsAttachmentMenuOpen(false) }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/5 rounded-xl transition-colors">
+                        <div className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg"><Camera className="w-4 h-4" /></div> Camera
+                      </button>
+                      <button type="button" onClick={() => { document.getElementById('documentInput')?.click(); setIsAttachmentMenuOpen(false) }} className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/5 rounded-xl transition-colors">
+                        <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg"><FileText className="w-4 h-4" /></div> Document
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Click away layer to close menu */}
+                  {isAttachmentMenuOpen && (
+                    <div className="fixed inset-0 z-[50]" onClick={() => setIsAttachmentMenuOpen(false)} />
+                  )}
+                </div>
+
+                <textarea
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e as any);
+                    }
+                  }}
+                  placeholder="Message #general"
+                  className="flex-1 bg-transparent border-none px-2 py-2.5 text-[15px] text-slate-200 focus:outline-none resize-none min-h-[44px] max-h-[200px] custom-scrollbar placeholder:text-slate-500"
+                  rows={1}
+                />
+
+                <div className="flex items-center gap-1 shrink-0 pb-1.5 px-1">
+                  <button type="button" className="p-2 text-slate-400 hover:text-amber-400 hover:bg-white/5 rounded-xl transition-colors">
+                    <Smile className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={(!inputMessage.trim() && !pendingFile) || isUploading}
+                    className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all hover:scale-105 active:scale-95 ml-1 disabled:hover:scale-100"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </form>
+          );
+        })()}
       </div>
 
       {/* Full Screen Image Lightbox overlay */}

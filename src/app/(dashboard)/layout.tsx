@@ -9,13 +9,16 @@ import {
   Search, Bell, User, X, Check, Copy,
   Building2, Sparkles, Globe, Loader2,
   Mic, Video, Music, Volume2, Trash2,
-  LogOut, HelpCircle, Menu
+  LogOut, HelpCircle, Menu, UserPlus, Lock
 } from 'lucide-react';
 import { WorkspaceService } from '@/lib/services/workspace.service';
+import { ChannelService } from '@/lib/services/channel.service';
 import { api } from '@/lib/api';
+import { socketService } from '@/lib/services/socket.service';
 import DarkVeil from '../(marketing)/DarkVeil';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { IUserSafe } from '@/types/auth';
+import { AddChannelMemberDropdown } from '@/components/chat/AddChannelMemberDropdown';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -27,13 +30,19 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isChannelModalOpen, setIsChannelModalOpen] = React.useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [channels, setChannels] = React.useState<any[]>([]);
   const [isChannelsLoading, setIsChannelsLoading] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isChannelMemberDropdownOpen, setIsChannelMemberDropdownOpen] = React.useState(false);
 
-  const activeWorkspaceId = pathname?.split('/')[2];
+  // Extract workspace & channel context from URL dynamically
+  const activeWorkspaceId = pathname?.split('/workspace/')[1]?.split('/')[0] || pathname?.split('/')[2];
+  const channelMatch = pathname?.match(/\/channel\/([^\/]+)/);
+  const activeChannelId = channelMatch ? channelMatch[1] : null;
+
   const activeWorkspace = user?.workspaces?.find(w => w.workspaceId === activeWorkspaceId);
   const displayName = activeWorkspace ? activeWorkspace.name : "Workspace";
 
@@ -79,6 +88,16 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
       }
     };
     fetchChannels();
+
+    socketService.onChannelCreated((newChannel: any) => {
+      if (newChannel.workspaceId === activeWorkspaceId) {
+        setChannels(prev => {
+          if (prev.some(c => c._id === newChannel._id || c.id === newChannel._id)) return prev;
+          return [...prev, newChannel];
+        });
+      }
+    });
+
   }, [activeWorkspaceId]);
 
   const handleDeleteWorkspace = async () => {
@@ -100,8 +119,11 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
     }
   };
 
-  // Logic to determine if user is an Organization Founder
-  const isOrgFounder = user?.organizations?.some(org => org.role === 'admin');
+  // Permissions Logic
+  // Simplify admin checks by scanning the user's organization array since 'admin' role cascades.
+  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
+  const isOrgFounder = isPrivileged;
+  const activeOrgId = (activeWorkspace as any)?.orgId || user?.organizations?.[0]?.orgId;
 
   // Loading State (Premium Spinner)
   if (isLoading) {
@@ -149,50 +171,54 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 bg-white rounded-r-full transition-all duration-300 group-hover:h-5"></div>
         </div>
 
-        <div className="w-8 h-[2px] bg-slate-800 rounded-full"></div>
+        <div className="w-8 h-[2px] bg-slate-800 rounded-full shrink-0"></div>
 
         {/* Workspace List (Dynamic) */}
-        {user?.workspaces?.map((ws) => {
-          const isActive = pathname?.includes(ws.workspaceId);
-          // Helper for initials
-          const initials = ws.name
-            .split(' ')
-            .map(word => word[0])
-            .join('')
-            .slice(0, 2)
-            .toUpperCase();
+        <div className="flex flex-col gap-4 overflow-y-auto no-scrollbar w-full items-center shrink-0 max-h-[240px]">
+          {user?.workspaces?.map((ws) => {
+            const isActive = pathname?.includes(ws.workspaceId);
+            // Helper for initials
+            const initials = ws.name
+              .split(' ')
+              .map(word => word[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase();
 
-          // Generate a deterministic gradient class based on the workspace ID's character sum
-          const gradients = [
-            "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500",
-            "bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600",
-            "bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500",
-            "bg-gradient-to-br from-rose-400 via-red-500 to-orange-500",
-            "bg-gradient-to-br from-amber-400 via-orange-500 to-red-500",
-            "bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-400"
-          ];
-          const hash = Array.from(ws.workspaceId).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-          const gradientClass = gradients[hash % gradients.length];
+            // Generate a deterministic gradient class based on the workspace ID's character sum
+            const gradients = [
+              "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500",
+              "bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600",
+              "bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500",
+              "bg-gradient-to-br from-rose-400 via-red-500 to-orange-500",
+              "bg-gradient-to-br from-amber-400 via-orange-500 to-red-500",
+              "bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-400"
+            ];
+            const hash = Array.from(ws.workspaceId).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+            const gradientClass = gradients[hash % gradients.length];
 
-          return (
-            <div key={ws.workspaceId} className="group relative">
-              <Link href={`/workspace/${ws.workspaceId}`} onClick={() => setIsMobileMenuOpen(false)}>
-                <button className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${isActive
-                  ? `${gradientClass} shadow-[0_0_20px_rgba(255,255,255,0.3)] text-white ring-2 ring-white/30 scale-105`
-                  : `${gradientClass} opacity-70 hover:opacity-100 hover:scale-[1.02] text-white/90`
-                  }`}>
-                  {initials}
-                </button>
-              </Link>
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-10 bg-white rounded-r-full transition-all duration-300"></div>
-              )}
-              {!isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 bg-white opacity-0 group-hover:opacity-100 group-hover:h-5 rounded-r-full transition-all duration-300"></div>
-              )}
-            </div>
-          );
-        })}
+            return (
+              <div key={ws.workspaceId} className="group relative shrink-0">
+                <Link href={`/workspace/${ws.workspaceId}`} onClick={() => setIsMobileMenuOpen(false)}>
+                  <button
+                    style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: "1px" }}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg transition-all duration-300 ${isActive
+                      ? `${gradientClass} shadow-[0_0_20px_rgba(255,255,255,0.3)] text-white ring-2 ring-white/30 scale-105`
+                      : `${gradientClass} opacity-70 hover:opacity-100 hover:scale-[1.02] text-white/90`
+                      }`}>
+                    {initials}
+                  </button>
+                </Link>
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-10 bg-white rounded-r-full transition-all duration-300"></div>
+                )}
+                {!isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 bg-white opacity-0 group-hover:opacity-100 group-hover:h-5 rounded-r-full transition-all duration-300"></div>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
         {/* Add Workspace / Create Workspace */}
         <div className="group/btn relative mt-auto">
@@ -289,10 +315,43 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               <CreateChannelForm
                 workspaceId={activeWorkspaceId}
                 onSuccess={(newChannel: any) => {
-                  setChannels(prev => [...prev, newChannel]);
+                  setChannels(prev => {
+                    if (prev.some(c => c._id === newChannel._id || c.id === newChannel._id)) return prev;
+                    return [...prev, newChannel];
+                  });
                   setIsChannelModalOpen(false);
+                  // Instantly navigate to the newly created channel to provide immediate UI feedback limit refresh
+                  router.push(`/workspace/${activeWorkspaceId}/channel/${newChannel._id || newChannel.id}`);
                 }}
                 onClose={() => setIsChannelModalOpen(false)}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── INVITE MEMBER MODAL ─── */}
+      <AnimatePresence>
+        {isInviteModalOpen && activeWorkspaceId && activeOrgId && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsInviteModalOpen(false)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="h-[2px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+              <InviteMemberForm
+                workspaceId={activeWorkspaceId}
+                orgId={activeOrgId}
+                onClose={() => setIsInviteModalOpen(false)}
               />
             </motion.div>
           </div>
@@ -375,7 +434,10 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
                   </button>
                 )}
                 <button
-                  onClick={() => setIsChannelModalOpen(true)}
+                  onClick={() => {
+                    if (isPrivileged) setIsChannelModalOpen(true);
+                    else alert("Only workspace admins can create new channels.");
+                  }}
                   className="flex items-center justify-center w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/5 hover:border-white/20 group"
                   title="Create Channel"
                 >
@@ -391,16 +453,41 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               </div>
             ) : channels.length > 0 ? (
               channels.map(channel => {
-                const Icon = channel.type === 'VOICE' ? Mic :
-                  channel.type === 'VIDEO' ? Video :
-                    channel.type === 'AUDIO' ? Music : Hash;
+                const isMember = channel.name === 'general' || isPrivileged || (channel.members && channel.members.some((m: any) => m === user?.id || m._id === user?.id || m.userId === user?.id || (m.userId && m.userId._id === user?.id)));
+
+                const Icon = !isMember ? Lock :
+                  channel.type === 'VOICE' ? Mic :
+                    channel.type === 'VIDEO' ? Video :
+                      channel.type === 'AUDIO' ? Music : Hash;
+
                 return (
-                  <Link key={channel._id || channel.id} href={`/workspace/${activeWorkspaceId}/channel/${channel._id || channel.id}`} onClick={() => setIsMobileMenuOpen(false)}>
-                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-colors cursor-pointer">
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="text-sm font-medium truncate">{channel.name}</span>
-                    </div>
-                  </Link>
+                  <div
+                    key={channel._id || channel.id}
+                    onClick={(e) => {
+                      if (!isMember) {
+                        e.preventDefault();
+                        // Instead of redirecting, just show a temporary text alert natively hovering
+                        const lockBtn = e.currentTarget;
+                        const originalText = lockBtn.querySelector('span')?.innerText;
+                        const span = lockBtn.querySelector('span');
+                        if (span && originalText) {
+                          span.innerText = "Private (Ask Admin)";
+                          span.classList.add("text-rose-400");
+                          setTimeout(() => {
+                            span.innerText = originalText;
+                            span.classList.remove("text-rose-400");
+                          }, 2000);
+                        }
+                        return;
+                      }
+                      setIsMobileMenuOpen(false);
+                      router.push(`/workspace/${activeWorkspaceId}/channel/${channel._id || channel.id}`);
+                    }}
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors cursor-pointer ${isMember ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-500'}`}
+                  >
+                    <Icon className={`w-4 h-4 shrink-0 ${!isMember ? 'opacity-70' : ''}`} />
+                    <span className="text-sm font-medium truncate">{channel.name}</span>
+                  </div>
                 );
               })
             ) : (
@@ -430,9 +517,32 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-5">
-            <div className="hidden lg:flex items-center bg-black/60 backdrop-blur-xl border border-white/5 rounded-full px-4 py-1.5 w-72 focus-within:border-indigo-500/50 focus-within:bg-[#111] focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all shadow-inner group">
-              <Search className="h-4 w-4 text-slate-500 mr-2 group-focus-within:text-indigo-400 transition-colors" />
-              <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-slate-200 w-full placeholder:text-slate-600" />
+            {activeChannelId && isPrivileged && (
+              <div className="relative">
+                <button
+                  onClick={() => setIsChannelMemberDropdownOpen(true)}
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20 rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-sm shrink-0"
+                  title="Add to Channel"
+                >
+                  <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="pr-1 hidden sm:inline">Add Member</span>
+                  <span className="pr-1 sm:hidden">Add</span>
+                </button>
+                <AddChannelMemberDropdown
+                  isOpen={isChannelMemberDropdownOpen}
+                  onClose={() => setIsChannelMemberDropdownOpen(false)}
+                  orgId={activeOrgId!}
+                  channelId={activeChannelId}
+                  onMemberAdded={(updatedChannel) => {
+                    // Update global UI channels state with new populated member references
+                    setChannels(prev => prev.map(c => c._id === updatedChannel._id || c.id === updatedChannel._id ? updatedChannel : c));
+                  }}
+                />
+              </div>
+            )}
+            <div className="flex items-center bg-black/60 backdrop-blur-xl border border-white/5 rounded-full px-3 py-1.5 w-24 sm:w-48 lg:w-72 focus-within:border-indigo-500/50 focus-within:bg-[#111] focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all shadow-inner group shrink">
+              <Search className="h-4 w-4 text-slate-500 sm:mr-2 group-focus-within:text-indigo-400 transition-colors shrink-0" />
+              <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-slate-200 w-full placeholder:text-slate-600 hidden sm:block" />
             </div>
             <button className="relative w-9 h-9 flex items-center justify-center rounded-full bg-slate-900/80 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all">
               <Bell className="h-4 w-4" />
@@ -671,25 +781,18 @@ function CreateChannelForm({
       setIsLoading(true);
       setError(null);
 
-      const res = await api.post('/channels', {
+      const res = await ChannelService.createChannel({
         name: name.toLowerCase().replace(/\s+/g, '-'),
         type,
         workspaceId
       });
 
-      onSuccess(res.data.data.channel);
+      onSuccess(res.data.channel);
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Failed to create channel');
       setIsLoading(false);
     }
   };
-
-  const channelTypes = [
-    { id: 'TEXT', label: 'Text', icon: Hash, desc: 'Send messages, images, and tools' },
-    { id: 'VOICE', label: 'Voice', icon: Mic, desc: 'Hang out with voice and audio' },
-    { id: 'AUDIO', label: 'Audio', icon: Music, desc: 'Dedicated audio streaming' },
-    { id: 'VIDEO', label: 'Video', icon: Video, desc: 'Face-to-face video calls' },
-  ];
 
   return (
     <div className="p-8 relative">
@@ -702,10 +805,7 @@ function CreateChannelForm({
 
       <div className="flex flex-col items-center justify-center mb-8 text-center pt-4">
         <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10 relative group">
-          {type === 'TEXT' && <Hash className="w-6 h-6 text-white relative z-10" />}
-          {type === 'VOICE' && <Mic className="w-6 h-6 text-white relative z-10" />}
-          {type === 'AUDIO' && <Music className="w-6 h-6 text-white relative z-10" />}
-          {type === 'VIDEO' && <Video className="w-6 h-6 text-white relative z-10" />}
+          <Hash className="w-6 h-6 text-white relative z-10" />
         </div>
         <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Create Channel</h2>
         <p className="text-slate-400 text-sm max-w-[280px]">Set up a new space for your team to connect.</p>
@@ -718,41 +818,11 @@ function CreateChannelForm({
           </div>
         )}
 
-        <div className="space-y-3">
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Channel Type</label>
-          <div className="grid grid-cols-1 gap-2">
-            {channelTypes.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setType(t.id as any)}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${type === t.id
-                  ? 'bg-white/10 border-white/20 text-white'
-                  : 'bg-transparent border-white/5 text-slate-400 hover:bg-white/5 hover:border-white/10'
-                  }`}
-              >
-                <div className={`p-2 rounded-lg ${type === t.id ? 'bg-white/10' : 'bg-white/5'}`}>
-                  <t.icon className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold">{t.label}</div>
-                  <div className="text-[11px] opacity-60">{t.desc}</div>
-                </div>
-                {type === t.id && (
-                  <div className="ml-auto w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 text-black" />
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-300 block mb-1">Channel Name</label>
           <div className="relative group flex items-center">
             <div className="absolute left-3 text-slate-500 font-medium pointer-events-none select-none text-sm border-r border-white/10 pr-2 py-1">
-              {type === 'TEXT' ? '#' : <Volume2 className="w-3.5 h-3.5" />}
+              #
             </div>
             <input
               autoFocus
@@ -782,6 +852,108 @@ function CreateChannelForm({
           )}
         </button>
       </form>
+    </div>
+  );
+}
+
+function InviteMemberForm({
+  workspaceId,
+  orgId,
+  onClose
+}: {
+  workspaceId: string;
+  orgId: string;
+  onClose: () => void;
+}) {
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [inviteCode, setInviteCode] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
+
+  const handleGenerate = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await api.post('/invites', {
+        organizationId: orgId,
+        workspaceId,
+        expiresInHours: 168,
+        maxUses: 100
+      });
+      setInviteCode(res.data.data.invite.code);
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Failed to generate invite');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+    if (!inviteCode) return;
+    navigator.clipboard.writeText(inviteCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="p-8 relative">
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded-md transition-all z-20"
+      >
+        <X className="w-4 h-4" />
+      </button>
+
+      <div className="flex flex-col items-center justify-center mb-6 text-center pt-4">
+        <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/10 relative group">
+          <UserPlus className="w-6 h-6 text-indigo-400 relative z-10" />
+        </div>
+        <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Invite Members</h2>
+        <p className="text-slate-400 text-sm max-w-[280px]">Generate a code to invite team members securely.</p>
+      </div>
+
+      {error && (
+        <div className="p-4 mb-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm animate-shake">
+          {error}
+        </div>
+      )}
+
+      {!inviteCode ? (
+        <button
+          onClick={handleGenerate}
+          disabled={isLoading}
+          className="w-full py-3 rounded-md bg-white text-black font-semibold text-sm hover:bg-slate-200 transition-colors shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
+            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full" />
+          ) : (
+            "Generate Invite Link"
+          )}
+        </button>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 p-3 bg-white/5 border border-white/10 rounded-xl justify-between group/code transition-all hover:border-white/20">
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold ml-1 mb-1">Invite Code</span>
+              <code className="text-2xl font-mono font-bold text-white px-1 tracking-wider">
+                {inviteCode}
+              </code>
+            </div>
+            <button
+              onClick={copyToClipboard}
+              className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all border border-white/10 group-hover/code:scale-105 active:scale-95"
+            >
+              {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 mt-2 rounded-md bg-white/10 text-white font-medium text-sm hover:bg-white/20 transition-colors shadow-sm"
+          >
+            Done
+          </button>
+        </div>
+      )}
     </div>
   );
 }
