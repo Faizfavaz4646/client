@@ -49,14 +49,23 @@ class SocketService {
     }
   }
 
+  private newMessageCallbacks: ((message: any) => void)[] = [];
+
   // 5. Listen for incoming messages
-  // We pass a 'callback' function here so it can update the React state in your UI
   onNewMessage(callback: (message: any) => void) {
     if (this.socket) {
-      // .off() prevents React StrictMode from accidentally attaching the listener twice!
-      this.socket.off("new-message");
-      this.socket.on("new-message", callback);
+      if (this.newMessageCallbacks.length === 0) {
+        this.socket.on("new-message", (message: any) => {
+          this.newMessageCallbacks.forEach(cb => cb(message));
+        });
+      }
+      this.newMessageCallbacks.push(callback);
     }
+  }
+
+  // Helper to remove listeners when components unmount
+  offNewMessage(callback: (message: any) => void) {
+    this.newMessageCallbacks = this.newMessageCallbacks.filter(cb => cb !== callback);
   }
 
   onMessageEdited(callback: (message: any) => void) {

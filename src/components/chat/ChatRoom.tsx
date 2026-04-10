@@ -26,7 +26,12 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
   const [isMounted, setIsMounted] = useState(false);
 
   const user = useAuthStore((state) => state.user);
-  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
+  const isPrivileged = user?.organizations?.some(org => 
+    org.role?.toLowerCase() === 'admin' || 
+    org.role?.toLowerCase() === 'owner' || 
+    org.role?.toLowerCase() === 'founder'
+  );
+  const isOrgFounder = !!isPrivileged;
 
   // 2. Tell React when the component has safely mounted in the browser
   useEffect(() => {
@@ -60,24 +65,20 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
     socketService.connect();
     socketService.joinChannel(channelId);
 
-    // Listen for new messages
-    socketService.onNewMessage((incomingData: Message) => {
+    const newMessageCallback = (incomingData: Message) => {
       console.log("📨 New message arrived!", incomingData);
       setMessages((prev) => {
-        // 1. Prevent exact duplicate IDs from being added (if any)
         if (incomingData._id && prev.some(m => m._id === incomingData._id)) return prev;
-
-        // 2. Identify if this incoming message matches an optimistic message we JUST sent.
         const isOptimisticDupe = prev.some(m => !m._id && m.content === incomingData.content);
-
         if (isOptimisticDupe) {
-          // Replace the optimistic message with the real one from the server (which includes proper DB ID)
           return prev.map(m => (!m._id && m.content === incomingData.content) ? incomingData : m);
         }
-
         return [...prev, incomingData];
       });
-    });
+    };
+
+    // Listen for new messages
+    socketService.onNewMessage(newMessageCallback);
 
     // Listen for real-time edits (if backend decides to broadcast them later)
     socketService.onMessageEdited((updatedMsg: Message) => {
@@ -86,11 +87,11 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
 
     // Listen for real-time deletes
     socketService.onMessageDeleted((data: { messageId: string }) => {
-      setMessages(prev => prev.filter(m => (m._id || m.id) !== data.messageId));
+      setMessages(prev => prev.map(m => (m._id || m.id) === data.messageId ? { ...m, isDeleted: true, content: "", attachments: [] } : m));
     });
 
     return () => {
-      socketService.disconnect();
+      socketService.offNewMessage(newMessageCallback);
     };
   }, [channelId, isMounted]); // Add isMounted to dependency array
 
@@ -221,18 +222,33 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
             <p className="text-slate-400 text-center">This is the start of the #{channel?.name || 'general'} channel. Start a conversation or share your media.</p>
           </div>
         ) : (
-          messages.filter(msg => !hiddenMessageIds.includes((msg._id || msg.id) as string)).map((msg, i) => {
-            const senderObj = msg.senderId || (msg as any).sender || {};
-            // Deep extract user ID due to backend mapping structure (id vs userId)
-            const activeUserId = user?.id || (user as any)?._id || (user as any)?.userId;
-            const isMe = senderObj._id === activeUserId || senderObj.id === activeUserId || senderObj === activeUserId || msg.senderId === activeUserId;
+          messages
+            .filter(msg => !hiddenMessageIds.includes((msg._id || msg.id) as string))
+            .filter(msg => !msg.content?.startsWith("@@SYSTEM_CALL_TYPE:"))
+            .map((msg, i) => {
+            const getID = (obj: any) => {
+              if (!obj) return null;
+              if (typeof obj === 'string') return obj.trim().toLowerCase();
+              const possibleId = obj?._id || obj?.id || obj?.userId || obj?.UserId || obj?.authorId || (obj as any)?.senderId?._id;
+              return possibleId ? String(possibleId).trim().toLowerCase() : null;
+            };
 
+            const senderObj = msg.senderId || (msg as any).sender || {};
+            const senderIdString = getID(msg.senderId) || getID((msg as any).sender);
+            const activeUserId = getID(user);
+            
             let senderName = senderObj.name || senderObj.username;
             if (!senderName) {
               const workspaceName = user?.workspaces?.find(w => w.workspaceId === channel?.workspaceId)?.name;
               senderName = workspaceName || user?.workspaces?.[0]?.name || "Unknown";
             }
-            if (isMe) senderName = "You";
+
+            // DUAL-IDENTITY FALLBACK: Match by ID OR by Exact Name Match
+            const isMeById = !!senderIdString && !!activeUserId && senderIdString === activeUserId;
+            const isMeByName = !!senderName && !!user?.name && senderName === user.name;
+            
+            if (isMeById || isMeByName) senderName = "You";
+            const isMe = isMeById || isMeByName || senderName === "You";
 
             const initial = senderName.charAt(0).toUpperCase();
             const avatarUrl = senderObj.avatar || (isMe ? user?.avatar : null);
@@ -242,8 +258,8 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
               : "Just now";
 
             return (
-              <div key={msg._id || msg.id || i} className="flex flex-col mb-1 group max-w-4xl mx-auto w-full items-start relative">
-                <div className="flex items-start gap-4 w-full hover:bg-white/[0.02] p-2 -mx-2 rounded-xl transition-colors">
+              <div key={msg._id || msg.id || i} className="flex flex-col mb-1 group max-w-4xl mx-auto w-full items-start relative box-border">
+                <div className="flex items-start gap-4 w-full hover:bg-white/[0.02] p-2 -mx-2 rounded-xl transition-colors relative">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt={senderName} className="w-10 h-10 rounded-full object-cover shrink-0 border border-[#0a0a0a] shadow-sm" />
                   ) : (
@@ -252,11 +268,56 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                     </div>
                   )}
                   <div className="flex flex-col min-w-0 flex-1 relative">
-                    <div className="flex items-baseline gap-2 mb-0.5">
+                    <div className="flex items-baseline gap-2 mb-0.5 pr-8">
                       <span className="text-[15px] font-bold text-slate-200 cursor-default">{senderName}</span>
                       <span className="text-[10px] font-medium text-slate-500">{timeString}</span>
                       {msg.isEdited && <span className="text-[10px] text-slate-500 italic">(edited)</span>}
                     </div>
+
+                    {/* Three Dots More Menu - FORCED VISIBILITY FOR AUTHOR */}
+                    {isMe && !editingMessageId && (msg._id || msg.id) && !msg._id?.startsWith('temp-') && !msg.isDeleted && (
+                      <div className="absolute top-0 right-0 opacity-60 hover:opacity-100 transition-opacity z-20 flex">
+                        <button
+                          onClick={() => setActiveMenuId(activeMenuId === (msg._id || msg.id) ? null : (msg._id || msg.id) as string)}
+                          className="p-1 px-2 text-slate-400 hover:text-white bg-[#1a1a1a]/80 hover:bg-[#2a2a2a] border border-white/10 rounded-md shadow-xl transition-colors"
+                        >
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Dropdown Options */}
+                        {activeMenuId === (msg._id || msg.id) && (
+                          <div className="absolute right-0 mt-8 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-1 z-30 overflow-hidden transform origin-top-right animate-in fade-in zoom-in-95 duration-100">
+                            {/* Edit: Only for TEXT messages */}
+                            {msg.type !== "IMAGE" && msg.type !== "FILE" && (
+                              <>
+                                <button onClick={() => { handleEditInit(msg); setActiveMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors">
+                                  <Edit2 className="w-4 h-4" /> Edit Message
+                                </button>
+                                <div className="h-px bg-white/5 my-1" />
+                              </>
+                            )}
+
+                            {/* Attachments: Save to Device */}
+                            {msg.type !== "TEXT" && (
+                              <>
+                                <a href={msg.attachments?.[0]?.url || msg.content} download target="_blank" rel="noreferrer" onClick={() => setActiveMenuId(null)} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-indigo-400 hover:text-white hover:bg-white/5 transition-colors">
+                                  <Download className="w-4 h-4" /> Save to Device
+                                </a>
+                                <div className="h-px bg-white/5 my-1" />
+                              </>
+                            )}
+
+                            <button onClick={() => handleDeleteForMe((msg._id || msg.id) as string)} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+                              <Trash2 className="w-4 h-4" /> Delete for me
+                            </button>
+
+                            <button onClick={() => handleDeleteForEveryone((msg._id || msg.id) as string)} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-rose-500 hover:bg-rose-500/10 transition-colors font-medium">
+                              <Trash2 className="w-4 h-4" /> Delete for everyone
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {editingMessageId === (msg._id || msg.id) ? (
                       <div className="mt-1 flex items-center gap-2">
@@ -300,46 +361,6 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                           <a href={msg.content} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 flex items-center gap-1 mt-1"><Paperclip className="w-4 h-4" /> Download Attachment</a>
                         ) : (
                           msg.content || (msg as any).text
-                        )}
-                      </div>
-                    )}
-
-                    {/* Three Dots More Menu */}
-                    {isMe && !editingMessageId && (msg._id || msg.id) && !msg._id?.startsWith('temp-') && !msg.isDeleted && (
-                      <div className="absolute -top-3 right-0 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex">
-                        <button
-                          onClick={() => setActiveMenuId(activeMenuId === (msg._id || msg.id) ? null : (msg._id || msg.id) as string)}
-                          className="p-1.5 text-slate-400 hover:text-white bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-white/10 rounded-lg shadow-xl transition-colors"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-
-                        {/* Dropdown Options */}
-                        {activeMenuId === (msg._id || msg.id) && (
-                          <div className="absolute right-0 mt-8 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-1 z-20 overflow-hidden transform origin-top-right animate-in fade-in zoom-in-95 duration-100">
-                            {msg.type !== "IMAGE" && msg.type !== "FILE" && (
-                              <>
-                                <button onClick={() => { handleEditInit(msg); setActiveMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors">
-                                  <Edit2 className="w-4 h-4" /> Edit Message
-                                </button>
-                                <div className="h-px bg-white/5 my-1" />
-                              </>
-                            )}
-                            {msg.type !== "TEXT" && (
-                              <>
-                                <a href={msg.content} download target="_blank" rel="noreferrer" onClick={() => setActiveMenuId(null)} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-indigo-400 hover:text-white hover:bg-white/5 transition-colors">
-                                  <Download className="w-4 h-4" /> Save to Device
-                                </a>
-                                <div className="h-px bg-white/5 my-1" />
-                              </>
-                            )}
-                            <button onClick={() => handleDeleteForMe((msg._id || msg.id) as string)} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
-                              <Trash2 className="w-4 h-4" /> Delete for me
-                            </button>
-                            <button onClick={() => handleDeleteForEveryone((msg._id || msg.id) as string)} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-rose-500 hover:bg-rose-500/10 transition-colors font-medium">
-                              <Trash2 className="w-4 h-4" /> Delete for everyone
-                            </button>
-                          </div>
                         )}
                       </div>
                     )}

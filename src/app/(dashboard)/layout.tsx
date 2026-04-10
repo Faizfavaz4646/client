@@ -19,6 +19,7 @@ import DarkVeil from '../(marketing)/DarkVeil';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { IUserSafe } from '@/types/auth';
 import { AddChannelMemberDropdown } from '@/components/chat/AddChannelMemberDropdown';
+import InviteLinkModal from '@/components/chat/InviteLinkModal';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -37,6 +38,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isChannelMemberDropdownOpen, setIsChannelMemberDropdownOpen] = React.useState(false);
+  const [isInviteLinkModalOpen, setIsInviteLinkModalOpen] = React.useState(false);
 
   // Extract workspace & channel context from URL dynamically
   const activeWorkspaceId = pathname?.split('/workspace/')[1]?.split('/')[0] || pathname?.split('/')[2];
@@ -122,7 +124,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   // Permissions Logic
   // Simplify admin checks by scanning the user's organization array since 'admin' role cascades.
   const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
-  const isOrgFounder = isPrivileged;
+  const isOrgFounder = !!isPrivileged;
   const activeOrgId = (activeWorkspace as any)?.orgId || user?.organizations?.[0]?.orgId;
 
   // Loading State (Premium Spinner)
@@ -358,6 +360,17 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         )}
       </AnimatePresence>
 
+      {/* ─── WORKSPACE INVITE LINK MODAL (PHASE 2) ─── */}
+      <AnimatePresence>
+        {isInviteLinkModalOpen && activeWorkspaceId && (
+          <InviteLinkModal 
+            workspaceId={activeWorkspaceId}
+            isOwner={isOrgFounder}
+            onClose={() => setIsInviteLinkModalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ─── DELETE WORKSPACE MODAL ─── */}
       <AnimatePresence>
         {isDeleteModalOpen && (
@@ -416,8 +429,19 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         <aside className={`absolute md:relative z-[45] md:z-10 h-full w-64 left-20 md:left-0 bg-black/40 backdrop-blur-xl border-r border-slate-800/60 flex flex-col py-4 shrink-0 transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-[200%] md:translate-x-0'}`}>
 
           {/* Workspace Header */}
-          <div className="h-16 border-b border-slate-800/60 flex items-center px-4 hover:bg-slate-900/40 cursor-pointer transition-all shrink-0">
-            <span className="font-semibold text-slate-100 truncate text-lg">{displayName}</span>
+          <div className="h-16 border-b border-slate-800/60 flex items-center px-4 hover:bg-slate-900/40 cursor-pointer transition-all shrink-0 relative group">
+            <div className="flex flex-col">
+              <span className="font-semibold text-slate-100 truncate text-lg leading-tight">{displayName}</span>
+              {isOrgFounder && (
+                <button 
+                  onClick={() => setIsInviteLinkModalOpen(true)}
+                  className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-400/80 hover:text-indigo-400 uppercase tracking-widest mt-0.5 transition-colors group/invite"
+                >
+                  <UserPlus className="w-3 h-3 group-hover/invite:scale-110 transition-transform" />
+                  Invite People
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Channel Categories */}
@@ -513,33 +537,12 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
             >
               <Menu className="w-5 h-5" />
             </button>
+
             {/* Optional: Add channel specific name here later */}
           </div>
 
           <div className="flex items-center gap-5">
-            {activeChannelId && isPrivileged && (
-              <div className="relative">
-                <button
-                  onClick={() => setIsChannelMemberDropdownOpen(true)}
-                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20 rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-sm shrink-0"
-                  title="Add to Channel"
-                >
-                  <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span className="pr-1 hidden sm:inline">Add Member</span>
-                  <span className="pr-1 sm:hidden">Add</span>
-                </button>
-                <AddChannelMemberDropdown
-                  isOpen={isChannelMemberDropdownOpen}
-                  onClose={() => setIsChannelMemberDropdownOpen(false)}
-                  orgId={activeOrgId!}
-                  channelId={activeChannelId}
-                  onMemberAdded={(updatedChannel) => {
-                    // Update global UI channels state with new populated member references
-                    setChannels(prev => prev.map(c => c._id === updatedChannel._id || c.id === updatedChannel._id ? updatedChannel : c));
-                  }}
-                />
-              </div>
-            )}
+
             <div className="flex items-center bg-black/60 backdrop-blur-xl border border-white/5 rounded-full px-3 py-1.5 w-24 sm:w-48 lg:w-72 focus-within:border-indigo-500/50 focus-within:bg-[#111] focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all shadow-inner group shrink">
               <Search className="h-4 w-4 text-slate-500 sm:mr-2 group-focus-within:text-indigo-400 transition-colors shrink-0" />
               <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-slate-200 w-full placeholder:text-slate-600 hidden sm:block" />

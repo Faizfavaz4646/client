@@ -1,14 +1,19 @@
+import axios, { AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/authStore';
-import axios from 'axios';
 
-// 1. Create the base Axios instance
+interface CustomAxiosRequestConfig extends AxiosRequestConfig {
+  _retry?: boolean;
+}
+
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1',
-  withCredentials: true, // CRUCIAL: Tells the browser to send secure cookies
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// 🔹 Request interceptor
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
   if (token) {
@@ -17,39 +22,52 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 2. Response Interceptor for handling expired tokens
+// 🔹 Response interceptor
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config as CustomAxiosRequestConfig;
 
-    // If 401 (Unauthorized) and we haven't already retried
-    // Do NOT intercept 401s from the login endpoint since that means bad credentials, not an expired token!
+    // Network error
+    if (!error.response) {
+      return Promise.reject({
+        message: "Network error. Check your connection.",
+        status: 500,
+      });
+    }
+
+    //  Token expired
     if (
-      error.response?.status === 401 && 
+      error.response.status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/login')
     ) {
       originalRequest._retry = true;
 
       try {
-        // Use a RAW axios call here to bypass interceptors and avoid circular dependencies!
-        await axios.post(
+        const res = await axios.post(
           `${api.defaults.baseURL}/auth/refresh`,
           {},
           { withCredentials: true }
         );
 
-        // If refresh succeeds, retry the original failed request
+        //  Update token
+        useAuthStore.getState().setAccessToken(res.data.accessToken);
+
         return api(originalRequest);
       } catch (refreshError) {
-        // If refresh fails (token expired completely), force logout
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+        useAuthStore.getState().logout();
+        return Promise.reject({
+          message: "Session expired. Please login again.",
+          status: 401,
+        });
       }
     }
 
-    return Promise.reject(error);
+    return Promise.reject({
+      message: error.response.data?.message || "Something went wrong",
+      status: error.response.status,
+    });
   }
 );
 

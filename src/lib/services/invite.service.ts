@@ -8,8 +8,20 @@ export const InviteService = {
   },
 
   // 2. Join a workspace with invite code (Authenticated)
-  joinWorkspace: async (inviteCode: string) => {
-    const response = await api.post("/invites/join", { inviteCode });
+  joinWorkspace: async (code: string) => {
+    const response = await api.post("/invites/join", { code });
     return response.data;
   },
+
+  // 3. Get the current active invite for a workspace
+  getWorkspaceInvite: async (workspaceId: string) => {
+    const response = await api.get(`/invites/workspace/${workspaceId}`);
+    return response.data;
+  },
+
+  // 4. Refresh/Rotate the invite code for a workspace
+  refreshWorkspaceInvite: async (workspaceId: string) => {
+    const response = await api.post(`/invites/workspace/${workspaceId}/refresh`);
+    return response.data;
+  }
 };
