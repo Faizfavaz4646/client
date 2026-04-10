@@ -8,15 +8,24 @@ import { CallRoomProps } from "@/types/call.types";
 import { useAuthStore } from "@/store/authStore";
 
 
-export default function CallRoom({ channelId, isAudioOnly, channel, onClose }: CallRoomProps) {
+export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMembers, onClose }: CallRoomProps) {
   const user = useAuthStore((state) => state.user);
   const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
 
   
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
-  const [isVideoOn, setIsVideoOn] = useState(!isAudioOnly);
-  const [isMicOn, setIsMicOn] = useState(true);
+  
+  // Persistent media state
+  const [isVideoOn, setIsVideoOn] = useState(() => {
+    const saved = sessionStorage.getItem(`call_video_${channelId}`);
+    return saved !== null ? saved === 'true' : !isAudioOnly;
+  });
+  const [isMicOn, setIsMicOn] = useState(() => {
+    const saved = sessionStorage.getItem(`call_mic_${channelId}`);
+    return saved !== null ? saved === 'true' : true;
+  });
+
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,26 +42,27 @@ export default function CallRoom({ channelId, isAudioOnly, channel, onClose }: C
 
     const initializeCall = async () => {
       try {
-        // 1. Ask for Camera/Mic permissions (Always ask so user CAN toggle it on later)
-        const stream = await webrtcService.startLocalMedia(true, true);
+        // 1. Prepare room ID in service for potential early toggles
+        webrtcService.currentRoomId = channelId;
+
+        // 2. Ask for Camera/Mic permissions
+        // Use the PERSISTENT states for initialization
+        const stream = await webrtcService.startLocalMedia(true, true, { 
+          startVideoMuted: !isVideoOn,
+          startAudioMuted: !isMicOn 
+        });
         
-        // 2. If it's an Audio call, immediately mute the video track
-        if (isAudioOnly) {
-          webrtcService.toggleMedia('video', false);
-        }
-        
-        // Safety check: if user left the page before clicking "Allow", stop the camera immediately
+        // Safety check: if user left the page during permission request, cleanup
         if (!mounted) {
           stream.getTracks().forEach(track => track.stop());
           return;
         }
         
         setLocalStream(stream);
-        
-        // 3. Join the signaling room
+
+        // 3. NOW Join the signaling room (Once localStream is ready for others to see)
         webrtcService.joinCall(channelId);
         setHasJoined(true);
-
       } catch (err) {
         console.error("Camera permissions denied or failed", err);
         if (mounted) {
@@ -88,7 +98,9 @@ export default function CallRoom({ channelId, isAudioOnly, channel, onClose }: C
 
     // 6. Listen for Participant Metadata (User ID + Media State changes)
     webrtcService.onParticipantMetadataUpdate = (newParticipants) => {
-      if (mounted) setParticipants(newParticipants);
+      if (mounted) {
+        setParticipants(new Map(newParticipants)); // Force new Map reference to trigger names sync
+      }
     };
 
     // 7. Cleanup when unmounting (leaving the page)
@@ -105,13 +117,17 @@ export default function CallRoom({ channelId, isAudioOnly, channel, onClose }: C
   // --- Handlers ---
   
   const toggleVideo = () => {
-    webrtcService.toggleMedia('video', !isVideoOn);
-    setIsVideoOn(!isVideoOn);
+    const newState = !isVideoOn;
+    webrtcService.toggleMedia('video', newState);
+    setIsVideoOn(newState);
+    sessionStorage.setItem(`call_video_${channelId}`, String(newState));
   };
 
   const toggleMic = () => {
-    webrtcService.toggleMedia('audio', !isMicOn);
-    setIsMicOn(!isMicOn);
+    const newState = !isMicOn;
+    webrtcService.toggleMedia('audio', newState);
+    setIsMicOn(newState);
+    sessionStorage.setItem(`call_mic_${channelId}`, String(newState));
   };
 
   const toggleScreenShare = async () => {
@@ -185,7 +201,17 @@ export default function CallRoom({ channelId, isAudioOnly, channel, onClose }: C
         {/* Remote Users */}
         {Array.from(remoteStreams.entries()).map(([socketId, stream]) => {
            const pInfo = participants.get(socketId);
-           return <VideoPlayer key={socketId} stream={stream} isLocal={false} participant={pInfo} channel={channel} isVideoOff={pInfo ? !pInfo.cameraEnabled : false} />
+           return (
+             <VideoPlayer 
+               key={socketId} 
+               stream={stream} 
+               isLocal={false} 
+               participant={pInfo} 
+               channel={channel} 
+               workspaceMembers={workspaceMembers}
+               isVideoOff={pInfo ? !pInfo.cameraEnabled : false} 
+             />
+           );
         })}
       </div>
 

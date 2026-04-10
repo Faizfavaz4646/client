@@ -1,4 +1,4 @@
-import { socketService } from "./socket.service";
+import { socketService } from "./socket.service";//for signaling
 import { 
   IWebRTCParticipantsPayload, 
   IWebRTCSignalPayload, 
@@ -7,9 +7,11 @@ import {
   IWebRTCMediaTogglePayload,
   IWebRTCLeavePayload,
   IWebRTCParticipant
-} from "@/types/webrtc"; // Adjust import path if needed
+} from "@/types/webrtc"; 
 
 // Standard STUN servers to help peers find each other
+//NAT hides a device’s private IP behind a public IP, making direct peer-to-peer communication difficult.
+//STUN helps a device discover its public IP address so peers can attempt direct communication.”
 const ICE_SERVERS = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -30,17 +32,27 @@ class WebRTCService {
   // Participant State Tracking
   public participants: Map<string, Pick<IWebRTCParticipant, 'userId' | 'cameraEnabled'>> = new Map();
   public onParticipantMetadataUpdate: ((participants: Map<string, Pick<IWebRTCParticipant, 'userId' | 'cameraEnabled'>>) => void) | null = null;
+  public onParticipantJoined: ((socketId: string) => void) | null = null;
 
   // 1. Initialize User Media (Camera/Mic)
-  async startLocalMedia(video = true, audio = true): Promise<MediaStream> {
+  async startLocalMedia(video = true, audio = true, options?: { startVideoMuted?: boolean; startAudioMuted?: boolean }): Promise<MediaStream> {
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({ video, audio });
+
+      // Apply initial mute states immediately if requested
+      if (options?.startVideoMuted) {
+        this.localStream.getVideoTracks().forEach(t => t.enabled = false);
+      }
+      if (options?.startAudioMuted) {
+        this.localStream.getAudioTracks().forEach(t => t.enabled = false);
+      }
+
       return this.localStream;
     } catch (error) {
       // Fallback: If camera is requested but missing/denied, try audio-only automatically
       if (video) {
-         console.warn("⚠️ Camera failed, trying audio-only fallback...");
-         return this.startLocalMedia(false, true);
+        console.warn("⚠️ Camera failed, trying audio-only fallback...");
+        return this.startLocalMedia(false, true, options);
       }
       console.error("🚨 Failed to get local media", error);
       throw error;
@@ -86,8 +98,12 @@ class WebRTCService {
 
     socket.off("webrtc:user-joined");
     socket.on("webrtc:user-joined", (data: { roomId: string, participant: IWebRTCParticipant }) => {
+      console.log("👋 New participant joined:", data.participant);
       this.participants.set(data.participant.socketId, { userId: data.participant.userId, cameraEnabled: data.participant.cameraEnabled });
       this.triggerParticipantUpdate();
+      if (this.onParticipantJoined) {
+        this.onParticipantJoined(data.participant.socketId);
+      }
     });
 
     socket.off("webrtc:media-state-changed");
@@ -100,9 +116,20 @@ class WebRTCService {
       }
     });
 
-    // Handle incoming signals
+    // 5. Handle incoming signals
     socket.off("webrtc:signal");
     socket.on("webrtc:signal", async (data: IWebRTCSignalPayload) => {
+      // PRO TIP: When the backend relays a signal, it includes the sender's userId.
+      // We catch it here so the UI can resolve "Unknown User" immediately!
+      if (data.senderSocketId && data.userId) {
+        const existing = this.participants.get(data.senderSocketId);
+        this.participants.set(data.senderSocketId, { 
+          userId: data.userId, 
+          cameraEnabled: existing?.cameraEnabled ?? true 
+        });
+        this.triggerParticipantUpdate();
+      }
+
       if (data.senderSocketId) {
         await this.handleIncomingSignal(data.senderSocketId, data.signal);
       }
@@ -316,6 +343,9 @@ class WebRTCService {
   }
 
   // 10. Cleanup
+  //closes all peers
+//stops media
+//clears state
   leaveCall(): void {
     if (this.currentRoomId) {
       const payload: IWebRTCLeavePayload = { roomId: this.currentRoomId };
