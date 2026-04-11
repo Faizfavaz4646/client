@@ -4,13 +4,14 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, 
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { TaskStatus, ITask } from '@/types/task.types';
 import { useTaskStore } from '@/store/taskStore';
+import { socketService } from '@/lib/services/socket.service';
 import KanbanColumn from './KanbanColumn';
 import TaskCard from './TaskCard';
 import TaskModal from './TaskModal';
 import { Plus } from 'lucide-react';
 
 export default function KanbanBoard({ channelId }: { channelId: string }) {
-  const { tasks, fetchTasks, moveTask } = useTaskStore();
+  const { tasks, fetchTasks, moveTask, addTask, updateTaskLocally, deleteTaskPureLocal } = useTaskStore();
   const [activeTask, setActiveTask] = useState<ITask | null>(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -18,7 +19,43 @@ export default function KanbanBoard({ channelId }: { channelId: string }) {
 
   useEffect(() => {
     fetchTasks(channelId);
-  }, [channelId]);
+
+    const handleTaskCreated = (data: { task: ITask }) => {
+      const taskChannelId = typeof data.task.channelId === 'string' 
+        ? data.task.channelId 
+        : (data.task.channelId as any)?._id;
+        
+      if (taskChannelId === channelId) {
+        addTask(data.task);
+      }
+    };
+
+    const handleTaskUpdated = (data: { task: ITask }) => {
+      const taskChannelId = typeof data.task.channelId === 'string' 
+        ? data.task.channelId 
+        : (data.task.channelId as any)?._id;
+        
+      if (taskChannelId === channelId) {
+        updateTaskLocally(data.task._id, data.task);
+      }
+    };
+
+    const handleTaskDeleted = (data: { taskId: string, channelId: string }) => {
+      if (data.channelId === channelId) {
+        deleteTaskPureLocal(data.taskId);
+      }
+    };
+
+    socketService.onTaskCreated(handleTaskCreated);
+    socketService.onTaskUpdated(handleTaskUpdated);
+    socketService.onTaskDeleted(handleTaskDeleted);
+
+    return () => {
+      socketService.offTaskCreated(handleTaskCreated);
+      socketService.offTaskUpdated(handleTaskUpdated);
+      socketService.offTaskDeleted(handleTaskDeleted);
+    };
+  }, [channelId, addTask, updateTaskLocally, deleteTaskPureLocal, fetchTasks]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
