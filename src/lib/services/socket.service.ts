@@ -88,6 +88,44 @@ class SocketService {
       this.socket.on("channel-created", callback);
     }
   }
+
+  // --- Task Events ---
+
+  onTaskCreated(callback: (data: { task: any }) => void) {
+    if (this.socket) {
+      this.socket.on("task:created", callback);
+    }
+  }
+
+  offTaskCreated(callback: (data: { task: any }) => void) {
+    if (this.socket) {
+      this.socket.off("task:created", callback);
+    }
+  }
+
+  onTaskUpdated(callback: (data: { task: any }) => void) {
+    if (this.socket) {
+      this.socket.on("task:updated", callback);
+    }
+  }
+
+  offTaskUpdated(callback: (data: { task: any }) => void) {
+    if (this.socket) {
+      this.socket.off("task:updated", callback);
+    }
+  }
+
+  onTaskDeleted(callback: (data: { taskId: string, channelId: string }) => void) {
+    if (this.socket) {
+      this.socket.on("task:deleted", callback);
+    }
+  }
+
+  offTaskDeleted(callback: (data: { taskId: string, channelId: string }) => void) {
+    if (this.socket) {
+      this.socket.off("task:deleted", callback);
+    }
+  }
 }
 
 // Export a single instance of the service to be shared across your whole app

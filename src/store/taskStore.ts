@@ -15,6 +15,7 @@ interface TaskState {
   addTask: (task: ITask) => void; // for modals
   updateTaskLocally: (taskId: string, updates: Partial<ITask>) => void;
   deleteTaskLocally: (taskId: string) => Promise<void>;
+  deleteTaskPureLocal: (taskId: string) => void;
 }
 
 export const useTaskStore = create<TaskState>()((set, get) => ({
@@ -69,7 +70,13 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
   },
 
   addTask: (task: ITask) => {
-    set((state) => ({ tasks: [task, ...state.tasks] }));
+    set((state) => {
+      // Prevent duplicates if we already added it optimistically
+      if (state.tasks.some(t => t._id === task._id)) {
+        return state;
+      }
+      return { tasks: [task, ...state.tasks] };
+    });
   },
 
   updateTaskLocally: (taskId: string, updates: Partial<ITask>) => {
@@ -92,5 +99,9 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
       // Revert if error
       set({ tasks: previousTasks, error: "Failed to delete task. Reverted changes." });
     }
+  },
+
+  deleteTaskPureLocal: (taskId: string) => {
+    set((state) => ({ tasks: state.tasks.filter((t) => t._id !== taskId) }));
   },
 }));
