@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ITask, TaskPriority } from '@/types/task.types';
+import { TaskStatus, ITask, TaskPriority } from '@/types/task.types';
 import { useTaskStore } from '@/store/taskStore';
-import { MoreVertical, Edit2, Trash2, Calendar, UserPlus } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Calendar, UserPlus, CircleDashed, Timer, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TaskCardProps {
@@ -60,14 +60,29 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className={`relative group bg-[#111113] border border-white/10 rounded-xl p-4 cursor-grab active:cursor-grabbing hover:border-white/20 transition-all ${
+      className={`relative group bg-[#111113] border overflow-hidden rounded-xl p-4 cursor-grab active:cursor-grabbing hover:border-white/20 transition-all ${
+        task.status === TaskStatus.COMPLETED ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-white/10'
+      } ${
         isDragging ? 'opacity-50 z-50 ring-2 ring-indigo-500 scale-105' : ''
       }`}
     >
-        <div className="flex justify-between items-start mb-2 gap-2">
-          <div className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${priorityColors[task.priority]}`}>
-            <Flag size={10} className="stroke-[3px]" />
-            {task.priority}
+        {/* Top-Right Absolute Icon for Completed */}
+        {task.status === TaskStatus.COMPLETED && (
+          <div className="absolute top-0 right-0 w-8 h-8 flex items-center justify-center bg-emerald-500/10 rounded-bl-xl border-b border-l border-emerald-500/20">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          </div>
+        )}
+        <div className="flex justify-between items-start mb-3 gap-2">
+          <div className="flex items-center gap-2">
+            {/* Status Icon */}
+            {task.status === TaskStatus.TODO && <CircleDashed className="w-4 h-4 text-slate-500" title="To Do" />}
+            {task.status === TaskStatus.ONGOING && <Timer className="w-4 h-4 text-indigo-400" title="In Progress" />}
+            {task.status === TaskStatus.COMPLETED && <CheckCircle2 className="w-4 h-4 text-emerald-400" title="Completed" />}
+
+            <div className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${priorityColors[task.priority]}`}>
+              <Flag size={10} className="stroke-[3px]" />
+              {task.priority}
+            </div>
           </div>
           
           {isPrivileged && (

@@ -11,6 +11,7 @@ import KanbanBoard from '@/components/tasks/KanbanBoard';
 import { useAuthStore } from '@/store/authStore';
 import { OrganizationService } from '@/lib/services/organization.service';
 import { WorkspaceService } from '@/lib/services/workspace.service';
+import { socketService } from '@/lib/services/socket.service';
 
 import { useChannelCallTracker } from '@/hooks/useChannelCallTracker';
 import { CallNotificationBanner } from '@/components/chat/CallNotificationBanner';
@@ -69,6 +70,13 @@ export default function ChannelPage() {
   // Reset the call state if they switch to a different channel in the sidebar
   React.useEffect(() => {
     setIsCallActive(false);
+  }, [channelId]);
+
+  // Ensure socket is connected globally for this channel
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    socketService.connect();
+    socketService.joinChannel(channelId as string);
   }, [channelId]);
 
   React.useEffect(() => {
@@ -151,10 +159,9 @@ export default function ChannelPage() {
           setIsCallActive={setIsCallActive}
         />
 
-        {/* The Actual Chat/Action Area */}
         <div className="flex-1 min-h-0 relative z-10 w-full overflow-hidden">
            {activeTab === 'tasks' ? (
-             <KanbanBoard channelId={channelId as string} />
+             <KanbanBoard channelId={channelId as string} isPrivileged={isPrivileged || false} />
            ) : (
              <ChatRoom channelId={channelId as string} channel={channel} />
            )}

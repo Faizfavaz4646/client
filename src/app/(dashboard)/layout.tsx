@@ -9,13 +9,12 @@ import {
   Search, Bell, User, X, Check, Copy,
   Building2, Sparkles, Globe, Loader2,
   Mic, Video, Music, Volume2, Trash2,
-  LogOut, HelpCircle, Menu, UserPlus, Lock
+  LogOut, HelpCircle, Menu, UserPlus, Lock, Shield
 } from 'lucide-react';
 import { WorkspaceService } from '@/lib/services/workspace.service';
 import { ChannelService } from '@/lib/services/channel.service';
 import { api } from '@/lib/api';
 import { socketService } from '@/lib/services/socket.service';
-import DarkVeil from '../(marketing)/DarkVeil';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { IUserSafe } from '@/types/auth';
 import { AddChannelMemberDropdown } from '@/components/chat/AddChannelMemberDropdown';
@@ -37,7 +36,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   const [isChannelsLoading, setIsChannelsLoading] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-  const [isChannelMemberDropdownOpen, setIsChannelMemberDropdownOpen] = React.useState(false);
+  const [channelToAddMemberId, setChannelToAddMemberId] = React.useState<string | null>(null);
   const [isInviteLinkModalOpen, setIsInviteLinkModalOpen] = React.useState(false);
 
   // Extract workspace & channel context from URL dynamically
@@ -121,6 +120,19 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
     }
   };
 
+  const handleDeleteChannel = async (channelIdToDelete: string) => {
+    if (!confirm("Are you sure you want to delete this channel?")) return;
+    try {
+      await ChannelService.deleteChannel(channelIdToDelete);
+      setChannels(prev => prev.filter(c => (c._id || c.id) !== channelIdToDelete));
+      if (activeChannelId === channelIdToDelete) {
+        router.push(`/workspace/${activeWorkspaceId}`);
+      }
+    } catch (err) {
+      console.error("Failed to delete channel", err);
+    }
+  };
+
   // Permissions Logic
   // Simplify admin checks by scanning the user's organization array since 'admin' role cascades.
   const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
@@ -142,18 +154,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-[#0a0a0a] text-slate-300 overflow-hidden font-sans relative">
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <DarkVeil
-          hueShift={0}
-          noiseIntensity={0}
-          scanlineIntensity={0}
-          speed={0.5}
-          scanlineFrequency={0}
-          warpAmount={0}
-        />
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
-      </div>
+    <div className="flex h-screen bg-black text-slate-300 overflow-hidden font-sans relative">
 
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
@@ -371,6 +372,23 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         )}
       </AnimatePresence>
 
+      {/* ─── ADD CHANNEL MEMBER DROPDOWN ─── */}
+      {channelToAddMemberId && activeOrgId && (
+        <AddChannelMemberDropdown
+          isOpen={!!channelToAddMemberId}
+          onClose={() => setChannelToAddMemberId(null)}
+          orgId={activeOrgId}
+          channelId={channelToAddMemberId}
+          workspaceId={activeWorkspaceId}
+          onMemberAdded={(updatedChannel) => {
+            // Update channel list to reflect new membership
+            setChannels(prev => prev.map(c => 
+              (c._id || c.id) === channelToAddMemberId ? updatedChannel : c
+            ));
+          }}
+        />
+      )}
+
       {/* ─── DELETE WORKSPACE MODAL ─── */}
       <AnimatePresence>
         {isDeleteModalOpen && (
@@ -507,10 +525,47 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
                       setIsMobileMenuOpen(false);
                       router.push(`/workspace/${activeWorkspaceId}/channel/${channel._id || channel.id}`);
                     }}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors cursor-pointer ${isMember ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-500'}`}
+                    className={`group/channel flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors cursor-pointer ${isMember ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-500'}`}
                   >
-                    <Icon className={`w-4 h-4 shrink-0 ${!isMember ? 'opacity-70' : ''}`} />
-                    <span className="text-sm font-medium truncate">{channel.name}</span>
+                    <div className="flex items-center gap-2 overflow-hidden flex-1">
+                      <Icon className={`w-4 h-4 shrink-0 ${!isMember ? 'opacity-70' : ''}`} />
+                      <span className="text-sm font-medium truncate">{channel.name}</span>
+                    </div>
+
+                    {isPrivileged && channel.name.toLowerCase() !== 'general' && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover/channel:opacity-100 transition-opacity pl-2">
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setChannelToAddMemberId(channel._id || channel.id); 
+                          }} 
+                          className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-indigo-400 transition-colors group/btn relative"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black text-[10px] text-white px-2 py-1 rounded border border-white/10 opacity-0 group-hover/btn:opacity-100 whitespace-nowrap z-50 pointer-events-none">Add Member</span>
+                        </button>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            // TODO: Role assignment logic
+                          }} 
+                          className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-amber-400 transition-colors group/btn relative"
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black text-[10px] text-white px-2 py-1 rounded border border-white/10 opacity-0 group-hover/btn:opacity-100 whitespace-nowrap z-50 pointer-events-none">Role Assignment</span>
+                        </button>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            handleDeleteChannel(channel._id || channel.id); 
+                          }} 
+                          className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 rounded transition-colors group/btn relative"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black text-[10px] text-white px-2 py-1 rounded border border-white/10 opacity-0 group-hover/btn:opacity-100 whitespace-nowrap z-50 pointer-events-none">Delete Channel</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })

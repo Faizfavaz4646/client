@@ -110,46 +110,47 @@ export default function InviteLinkModal({ workspaceId, isOwner, onClose }: Invit
                <Loader2 className="w-6 h-6 animate-spin text-slate-600" />
                <span className="text-xs text-slate-500 font-medium tracking-widest uppercase">Fetching Link...</span>
              </div>
-          ) : error ? (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm text-center mb-6">
-              {error}
-            </div>
           ) : (
             <div className="space-y-6">
-              {/* The Link Card */}
-              <div className="p-5 bg-white/5 border border-white/10 rounded-2xl group transition-all hover:bg-white/[0.07] hover:border-white/20">
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Invite Link</span>
-                    <LinkIcon className="w-3.5 h-3.5 text-slate-600" />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <code className="flex-1 text-lg font-mono font-bold text-white truncate pr-2">
-                      {inviteCode}
-                    </code>
-                    <button
-                      onClick={copyToClipboard}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-semibold text-sm ${
-                        copied 
-                        ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
-                        : 'bg-white text-black hover:bg-slate-200'
-                      }`}
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          <span>Copy Link</span>
-                        </>
-                      )}
-                    </button>
+              {error ? (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm text-center mb-2">
+                  {error}
+                </div>
+              ) : (
+                <div className="p-5 bg-white/5 border border-white/10 rounded-2xl group transition-all hover:bg-white/[0.07] hover:border-white/20">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Invite Link</span>
+                      <LinkIcon className="w-3.5 h-3.5 text-slate-600" />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <code className="flex-1 text-lg font-mono font-bold text-white truncate pr-2">
+                        {inviteCode}
+                      </code>
+                      <button
+                        onClick={copyToClipboard}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-semibold text-sm ${
+                          copied 
+                          ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
+                          : 'bg-white text-black hover:bg-slate-200'
+                        }`}
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="w-4 h-4" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Owner Controls */}
               {isOwner && (
@@ -160,10 +161,10 @@ export default function InviteLinkModal({ workspaceId, isOwner, onClose }: Invit
                     className="w-full flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-white transition-all text-xs font-semibold group"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-                    <span>{isRefreshing ? "Regenerating..." : "Regenerate Invite Link"}</span>
+                    <span>{isRefreshing ? "Generating..." : "Generate New Invite Link"}</span>
                   </button>
                   <p className="text-[10px] text-slate-600 text-center mt-2 px-4">
-                    Refreshing the code will invalidate the previous link. Use this only if the link was shared publicly.
+                    Generating a new code will invalidate any previous links.
                   </p>
                 </div>
               )}

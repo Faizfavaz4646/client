@@ -9,7 +9,7 @@ export const InviteService = {
 
   // 2. Join a workspace with invite code (Authenticated)
   joinWorkspace: async (code: string) => {
-    const response = await api.post("/invites/join", { code });
+    const response = await api.post("/invites/join", { inviteCode: code });
     return response.data;
   },
 
@@ -21,7 +21,7 @@ export const InviteService = {
 
   // 4. Refresh/Rotate the invite code for a workspace
   refreshWorkspaceInvite: async (workspaceId: string) => {
-    const response = await api.post(`/invites/workspace/${workspaceId}/refresh`);
+    const response = await api.post(`/invites/workspace/${workspaceId}/refresh`, {});
     return response.data;
   }
 };

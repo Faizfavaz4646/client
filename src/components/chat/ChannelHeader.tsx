@@ -1,5 +1,5 @@
 import React from 'react';
-import { Hash, Video, Phone, Settings2 } from 'lucide-react';
+import { Hash, Video, Phone, Settings2, UserPlus, Shield, Trash2 } from 'lucide-react';
 import { socketService } from '@/lib/services/socket.service';
 
 interface ChannelHeaderProps {
@@ -51,6 +51,30 @@ export function ChannelHeader({
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Admin/Owner Channel Controls */}
+        {isPrivileged && channel.name.toLowerCase() !== 'general' && (
+          <div className="flex items-center gap-1 border-r border-white/10 pr-3 mr-1">
+            <button 
+              className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-white/5 rounded-md transition-all group relative"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black text-xs text-white px-2 py-1 rounded border border-white/10 opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none">Add Member</span>
+            </button>
+            <button 
+              className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-white/5 rounded-md transition-all group relative"
+            >
+              <Shield className="w-4 h-4" />
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black text-xs text-white px-2 py-1 rounded border border-white/10 opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none">Role Assignment</span>
+            </button>
+            <button 
+              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-all group relative"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black text-xs text-white px-2 py-1 rounded border border-white/10 opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none">Delete Channel</span>
+            </button>
+          </div>
+        )}
+
         {/* Owner Restricted Call Area */}
         {isPrivileged ? (
           <div className="flex items-center gap-1 bg-white/5 border border-white/5 rounded-lg p-1">

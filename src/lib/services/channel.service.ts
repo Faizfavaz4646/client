@@ -13,4 +13,10 @@ export const ChannelService = {
         const response = await api.post(`/channels/${channelId}/members`, { memberId });
         return response.data;
     },
+
+    // 3. Delete channel
+    deleteChannel: async (channelId: string): Promise<{ success: boolean }> => {
+        const response = await api.delete(`/channels/${channelId}`);
+        return response.data;
+    },
 };
