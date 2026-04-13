@@ -2,6 +2,7 @@ import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TaskStatus, ITask } from '@/types/task.types';
+import { CircleDashed, Timer, CheckCircle2 } from 'lucide-react';
 import TaskCard from './TaskCard';
 
 interface KanbanColumnProps {
@@ -18,12 +19,12 @@ export default function KanbanColumn({ status, tasks, onEditTask }: KanbanColumn
   return (
     <div className="flex flex-col flex-1 min-w-[300px] h-full bg-neutral-900/40 rounded-xl overflow-hidden border border-white/5">
       <div className="p-4 border-b border-white/5 flex items-center justify-between bg-neutral-900/80">
-        <h3 className="font-semibold text-white/90">
-          {status === TaskStatus.TODO && "To Do"}
-          {status === TaskStatus.ONGOING && "In Progress"}
-          {status === TaskStatus.COMPLETED && "Completed"}
+        <h3 className="font-semibold text-white/90 flex items-center gap-2">
+          {status === TaskStatus.TODO && <><CircleDashed className="w-4 h-4 text-slate-400" /> To Do</>}
+          {status === TaskStatus.ONGOING && <><Timer className="w-4 h-4 text-indigo-400" /> In Progress</>}
+          {status === TaskStatus.COMPLETED && <><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Completed</>}
         </h3>
-        <span className="bg-white/10 text-white/70 text-xs px-2 py-0.5 rounded-full">
+        <span className="bg-white/10 text-white/70 text-xs px-2 py-0.5 rounded-full font-medium">
           {tasks.length}
         </span>
       </div>

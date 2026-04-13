@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { TaskStatus, ITask } from '@/types/task.types';
 import { useTaskStore } from '@/store/taskStore';
@@ -10,7 +10,7 @@ import TaskCard from './TaskCard';
 import TaskModal from './TaskModal';
 import { Plus } from 'lucide-react';
 
-export default function KanbanBoard({ channelId }: { channelId: string }) {
+export default function KanbanBoard({ channelId, isPrivileged }: { channelId: string; isPrivileged?: boolean }) {
   const { tasks, fetchTasks, moveTask, addTask, updateTaskLocally, deleteTaskPureLocal } = useTaskStore();
   const [activeTask, setActiveTask] = useState<ITask | null>(null);
   
@@ -59,6 +59,7 @@ export default function KanbanBoard({ channelId }: { channelId: string }) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -96,16 +97,18 @@ export default function KanbanBoard({ channelId }: { channelId: string }) {
           <h1 className="text-2xl font-bold text-white tracking-tight">Tasks</h1>
           <p className="text-neutral-400 text-sm mt-1">Manage project workflow</p>
         </div>
-        <button
-          onClick={() => {
-            setTaskToEdit(null);
-            setIsModalOpen(true);
-          }}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <Plus size={18} />
-          <span>New Task</span>
-        </button>
+        {isPrivileged && (
+          <button
+            onClick={() => {
+              setTaskToEdit(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Plus size={18} />
+            <span>New Task</span>
+          </button>
+        )}
       </div>
 
       <DndContext 

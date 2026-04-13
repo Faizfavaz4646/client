@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { OrganizationService } from '@/lib/services/organization.service';
 import { ChannelService } from '@/lib/services/channel.service';
+import { WorkspaceService } from '@/lib/services/workspace.service';
 import { Plus, Check, Loader2, Search, X, UserPlus, Hash } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -16,6 +17,7 @@ export function AddChannelMemberDropdown({
     onClose: () => void;
     orgId: string;
     channelId: string;
+    workspaceId: string;
     onMemberAdded: (channel: any) => void;
 }) {
     const [members, setMembers] = useState<any[]>([]);
@@ -24,23 +26,32 @@ export function AddChannelMemberDropdown({
     const [addingId, setAddingId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (isOpen && orgId) {
+        if (isOpen && orgId && workspaceId) {
             const fetchMembers = async () => {
                 try {
                     setIsLoading(true);
-                    const res = await OrganizationService.getOrganizationMembers(orgId);
-                    if (res.success) {
-                        setMembers(res.data.members);
+                    
+                    const [orgRes, wsRes] = await Promise.all([
+                        OrganizationService.getOrganizationMembers(orgId),
+                        WorkspaceService.getWorkspaceById(workspaceId)
+                    ]);
+
+                    if (orgRes.success && wsRes.success) {
+                        const allOrgMembers = orgRes.data.members;
+                        const workspaceMemberIds = new Set(wsRes.data.members.map((m: any) => m.userId.toString() || m.userId._id?.toString()));
+                        
+                        const wsMembersOnly = allOrgMembers.filter((m: any) => workspaceMemberIds.has(m.id?.toString()));
+                        setMembers(wsMembersOnly);
                     }
                 } catch (error) {
-                    console.error("Failed to fetch organization members:", error);
+                    console.error("Failed to fetch members:", error);
                 } finally {
                     setIsLoading(false);
                 }
             };
             fetchMembers();
         }
-    }, [isOpen, orgId]);
+    }, [isOpen, orgId, workspaceId]);
 
     const handleAddMember = async (userId: string) => {
         try {
