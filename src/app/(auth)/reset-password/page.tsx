@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,10 +10,10 @@ import { api } from "@/lib/api";
 import Link from "next/link";
 import { Lock, Eye, EyeOff, CheckCircle2, ShieldCheck } from "lucide-react";
 
-export default function ResetPasswordPage() {
-  const params = useParams();
+function ResetPasswordForm() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const token = params.token as string;
+  const token = searchParams.get("token");
   
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,5 +177,17 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        Loading...
+      </div>
+    }>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

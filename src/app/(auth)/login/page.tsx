@@ -19,6 +19,7 @@ import { AuthService } from "@/lib/services/auth.service";
 import { OrganizationService } from "@/lib/services/organization.service";
 import Link from "next/link";
 import DarkVeil from "@/app/(marketing)/DarkVeil";
+import { toast } from "sonner";
 
 const DEFAULT_CATEGORIES = [
   "Software Company",
@@ -169,6 +170,7 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
 
       const user = res.data.data.user;
       setUser(user);
+      toast.success("Welcome back to SYNQ!");
 
       // Check if user is an Organization Founder (logged in via Workspace Login)
       const isFounder = user.organizations?.some((org: any) => org.orgId === user.id && org.role === 'admin');
@@ -184,7 +186,9 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
       }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: { message?: string } } } };
-      setError(e.response?.data?.error?.message || "Login failed.");
+      const errMsg = e.response?.data?.error?.message || "Login failed.";
+      setError(errMsg);
+      toast.error(errMsg);
     }
   };
 
@@ -431,9 +435,12 @@ function RegisterMemberForm({
       setError(null);
       await api.post("/auth/register", data);
       setSuccess(true);
+      toast.success("Account created successfully!");
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: { message?: string } } } };
-      setError(e.response?.data?.error?.message || "Registration failed.");
+      const errMsg = e.response?.data?.error?.message || "Registration failed.";
+      setError(errMsg);
+      toast.error(errMsg);
     }
   };
 
@@ -593,9 +600,12 @@ function RegisterOrgForm({
       setError(null);
       await OrganizationService.registerOrganization(data as never);
       setSuccess(true);
+      toast.success("Workspace registered successfully!");
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: { message?: string } } } };
-      setError(e.response?.data?.error?.message || "Organization registration failed.");
+      const errMsg = e.response?.data?.error?.message || "Organization registration failed.";
+      setError(errMsg);
+      toast.error(errMsg);
     }
   };
 

@@ -11,6 +11,7 @@ export function AddChannelMemberDropdown({
     onClose,
     orgId,
     channelId,
+    workspaceId,
     onMemberAdded,
 }: {
     isOpen: boolean;

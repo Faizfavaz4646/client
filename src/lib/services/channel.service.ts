@@ -19,4 +19,10 @@ export const ChannelService = {
         const response = await api.delete(`/channels/${channelId}`);
         return response.data;
     },
+
+    // 4. Update channel
+    updateChannel: async (channelId: string, data: Partial<IChannel> & { allowedRoles?: string[] }): Promise<{ success: boolean; data: { channel: IChannel } }> => {
+        const response = await api.patch(`/channels/${channelId}`, data);
+        return response.data;
+    },
 };

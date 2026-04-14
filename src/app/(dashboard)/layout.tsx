@@ -18,7 +18,9 @@ import { socketService } from '@/lib/services/socket.service';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { IUserSafe } from '@/types/auth';
 import { AddChannelMemberDropdown } from '@/components/chat/AddChannelMemberDropdown';
+import { ChannelRoleAssignmentDropdown } from '@/components/chat/ChannelRoleAssignmentDropdown';
 import InviteLinkModal from '@/components/chat/InviteLinkModal';
+import { toast } from 'sonner';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -37,6 +39,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [channelToAddMemberId, setChannelToAddMemberId] = React.useState<string | null>(null);
+  const [channelToAssignRolesId, setChannelToAssignRolesId] = React.useState<string | null>(null);
   const [isInviteLinkModalOpen, setIsInviteLinkModalOpen] = React.useState(false);
 
   // Extract workspace & channel context from URL dynamically
@@ -101,36 +104,62 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
 
   }, [activeWorkspaceId]);
 
-  const handleDeleteWorkspace = async () => {
+  const handleDeleteWorkspace = () => {
     if (!activeWorkspaceId) return;
-    try {
-      setIsDeleting(true);
-      await api.delete(`/workspaces/${activeWorkspaceId}`);
-      // Refresh user data to remove the workspace from the list
-      const res = await api.get('/auth/me');
-      if (res.data.success && res.data.data.user) {
-        setUser(res.data.data.user);
+    
+    toast.error('Delete Workspace?', {
+      description: `This will permanently delete "${displayName}" and all its channels.`,
+      action: {
+        label: 'Delete Permanently',
+        onClick: async () => {
+          try {
+            setIsDeleting(true);
+            await api.delete(`/workspaces/${activeWorkspaceId}`);
+            const res = await api.get('/auth/me');
+            if (res.data.success && res.data.data.user) {
+              setUser(res.data.data.user);
+            }
+            router.push('/workspace'); // Redirect to selection page
+            toast.success('Workspace deleted successfully.');
+          } catch (err) {
+            console.error("Failed to delete workspace", err);
+            toast.error('Failed to delete workspace.');
+          } finally {
+            setIsDeleting(false);
+          }
+        }
+      },
+      cancel: {
+        label: 'Cancel',
+        onClick: () => {}
       }
-      setIsDeleteModalOpen(false);
-      router.push('/workspace'); // Redirect to selection page
-    } catch (err) {
-      console.error("Failed to delete workspace", err);
-    } finally {
-      setIsDeleting(false);
-    }
+    });
   };
 
-  const handleDeleteChannel = async (channelIdToDelete: string) => {
-    if (!confirm("Are you sure you want to delete this channel?")) return;
-    try {
-      await ChannelService.deleteChannel(channelIdToDelete);
-      setChannels(prev => prev.filter(c => (c._id || c.id) !== channelIdToDelete));
-      if (activeChannelId === channelIdToDelete) {
-        router.push(`/workspace/${activeWorkspaceId}`);
+  const handleDeleteChannel = (channelIdToDelete: string, channelName?: string) => {
+    toast.error('Delete channel?', {
+      description: `Are you sure you want to permanently delete #${channelName || 'this channel'}?`,
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          try {
+            await ChannelService.deleteChannel(channelIdToDelete);
+            setChannels(prev => prev.filter(c => (c._id || c.id) !== channelIdToDelete));
+            if (activeChannelId === channelIdToDelete) {
+              router.push(`/workspace/${activeWorkspaceId}`);
+            }
+            toast.success('Channel deleted successfully.');
+          } catch (err) {
+            console.error("Failed to delete channel", err);
+            toast.error('Failed to delete channel.');
+          }
+        }
+      },
+      cancel: {
+        label: 'Cancel',
+        onClick: () => {}
       }
-    } catch (err) {
-      console.error("Failed to delete channel", err);
-    }
+    });
   };
 
   // Permissions Logic
@@ -255,8 +284,21 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         </button>
         <button
           onClick={() => {
-            setUser(null);
-            router.push('/login');
+            toast('Ready to leave?', {
+              description: 'Are you sure you want to log out of SYNQ?',
+              action: {
+                label: 'Log Out',
+                onClick: () => {
+                  setUser(null);
+                  router.push('/login');
+                  toast.success('Successfully logged out.');
+                }
+              },
+              cancel: {
+                label: 'Cancel',
+                onClick: () => {}
+              }
+            });
           }}
           className="w-12 h-12 rounded-xl flex items-center justify-center text-red-500/60 hover:text-red-400 hover:bg-red-500/10 transition-all mb-4 group"
         >
@@ -389,58 +431,22 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         />
       )}
 
-      {/* ─── DELETE WORKSPACE MODAL ─── */}
-      <AnimatePresence>
-        {isDeleteModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 12 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="relative w-full max-w-[420px] bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-0 shadow-2xl overflow-hidden"
-            >
-              <div className="h-[2px] bg-red-500/50" />
-              <div className="p-8">
-                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-red-500/20">
-                  <Trash2 className="w-8 h-8 text-red-500" />
-                </div>
-                <h2 className="text-2xl font-bold text-white text-center mb-2 tracking-tight">Delete Workspace?</h2>
-                <p className="text-slate-400 text-center mb-8 text-sm leading-relaxed">
-                  This will permanently delete <span className="text-white font-semibold">"{displayName}"</span> and all its channels. This action cannot be undone.
-                </p>
-                <div className="flex flex-col gap-3">
-                  <button
-                    onClick={handleDeleteWorkspace}
-                    disabled={isDeleting}
-                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-md transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-900/20"
-                  >
-                    {isDeleting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      "Delete Permanently"
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setIsDeleteModalOpen(false)}
-                    disabled={isDeleting}
-                    className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-medium rounded-md border border-white/10 transition-all"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* ─── ROLE ASSIGNMENT DROPDOWN ─── */}
+      {channelToAssignRolesId && activeOrgId && (
+        <ChannelRoleAssignmentDropdown
+          isOpen={!!channelToAssignRolesId}
+          onClose={() => setChannelToAssignRolesId(null)}
+          orgId={activeOrgId}
+          channelId={channelToAssignRolesId}
+          initialAllowedRoles={channels.find(c => (c._id || c.id) === channelToAssignRolesId)?.allowedRoles || []}
+          onChannelUpdated={(updatedChannel) => {
+            setChannels(prev => prev.map(c => 
+              (c._id || c.id) === channelToAssignRolesId ? updatedChannel : c
+            ));
+          }}
+        />
+      )}
+
 
       {/* ─── INNER SIDEBAR (CHANNELS) ─── */}
       {activeWorkspaceId && (
@@ -468,7 +474,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               <div className="flex items-center justify-center gap-3 mb-3">
                 {isOrgFounder && (
                   <button
-                    onClick={() => setIsDeleteModalOpen(true)}
+                    onClick={() => handleDeleteWorkspace()}
                     className="flex items-center justify-center w-9 h-9 rounded-lg bg-red-500/5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/20 group"
                     title="Delete Workspace"
                   >
@@ -547,7 +553,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            // TODO: Role assignment logic
+                            setChannelToAssignRolesId(channel._id || channel.id);
                           }} 
                           className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-amber-400 transition-colors group/btn relative"
                         >
@@ -557,7 +563,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            handleDeleteChannel(channel._id || channel.id); 
+                            handleDeleteChannel(channel._id || channel.id, channel.name); 
                           }} 
                           className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 rounded transition-colors group/btn relative"
                         >

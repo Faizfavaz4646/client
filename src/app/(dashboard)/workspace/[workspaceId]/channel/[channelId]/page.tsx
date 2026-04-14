@@ -16,12 +16,18 @@ import { socketService } from '@/lib/services/socket.service';
 import { useChannelCallTracker } from '@/hooks/useChannelCallTracker';
 import { CallNotificationBanner } from '@/components/chat/CallNotificationBanner';
 import { ChannelHeader } from '@/components/chat/ChannelHeader';
+import { AddChannelMemberDropdown } from '@/components/chat/AddChannelMemberDropdown';
+import { ChannelRoleAssignmentDropdown } from '@/components/chat/ChannelRoleAssignmentDropdown';
 
 export default function ChannelPage() {
   const { workspaceId, channelId } = useParams();
   const [channel, setChannel] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [resolvedOrgId, setResolvedOrgId] = React.useState<string | null>(null);
   
+  const [isAddMemberOpen, setIsAddMemberOpen] = React.useState(false);
+  const [isRoleAssignmentOpen, setIsRoleAssignmentOpen] = React.useState(false);
+
   // Tab state tracking
   const [activeTab, setActiveTab] = React.useState<'chat' | 'tasks'>(() => {
     if (typeof window !== 'undefined') {
@@ -90,10 +96,11 @@ export default function ChannelPage() {
 
         // 2. Fetch workspace/org details to get the REAL organizationId for members list
         const workspaceRes = await WorkspaceService.getWorkspaceById(workspaceId as string);
-        const resolvedOrgId = workspaceRes.data?.organizationId || workspaceRes.data?.orgId || workspaceId;
+        const orgId = workspaceRes.data?.organizationId || workspaceRes.data?.orgId || workspaceId;
+        setResolvedOrgId(orgId as string);
 
         // 3. Fetch workspace members for name resolution (Address Book)
-        const membersRes = await OrganizationService.getOrganizationMembers(resolvedOrgId as string);
+        const membersRes = await OrganizationService.getOrganizationMembers(orgId as string);
         if (membersRes.data) {
           setWorkspaceMembers(membersRes.data.members || membersRes.data);
         }
@@ -157,7 +164,31 @@ export default function ChannelPage() {
           setIsAudioOnlyMode={callTracker.setIsAudioOnlyMode}
           setIsCallOngoing={callTracker.setIsCallOngoing}
           setIsCallActive={setIsCallActive}
+          onAddMemberClick={() => setIsAddMemberOpen(true)}
+          onRoleAssignmentClick={() => setIsRoleAssignmentOpen(true)}
         />
+
+        {/* Modals for Channel Header */}
+        {resolvedOrgId && (
+          <AddChannelMemberDropdown
+            isOpen={isAddMemberOpen}
+            onClose={() => setIsAddMemberOpen(false)}
+            orgId={resolvedOrgId}
+            channelId={channelId as string}
+            workspaceId={workspaceId as string}
+            onMemberAdded={(updatedChannel) => setChannel(updatedChannel)}
+          />
+        )}
+        {resolvedOrgId && (
+          <ChannelRoleAssignmentDropdown
+            isOpen={isRoleAssignmentOpen}
+            onClose={() => setIsRoleAssignmentOpen(false)}
+            orgId={resolvedOrgId}
+            channelId={channelId as string}
+            initialAllowedRoles={channel?.allowedRoles || []}
+            onChannelUpdated={(updatedChannel) => setChannel(updatedChannel)}
+          />
+        )}
 
         <div className="flex-1 min-h-0 relative z-10 w-full overflow-hidden">
            {activeTab === 'tasks' ? (

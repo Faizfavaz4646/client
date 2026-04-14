@@ -12,6 +12,8 @@ interface ChannelHeaderProps {
   setIsAudioOnlyMode: (val: boolean) => void;
   setIsCallOngoing: (val: boolean) => void;
   setIsCallActive: (val: boolean) => void;
+  onAddMemberClick?: () => void;
+  onRoleAssignmentClick?: () => void;
 }
 
 export function ChannelHeader({
@@ -23,7 +25,9 @@ export function ChannelHeader({
   isCallOngoing,
   setIsAudioOnlyMode,
   setIsCallOngoing,
-  setIsCallActive
+  setIsCallActive,
+  onAddMemberClick,
+  onRoleAssignmentClick
 }: ChannelHeaderProps) {
   return (
     <div className="h-14 border-b border-white/5 bg-black/40 backdrop-blur-md flex items-center justify-between px-6 shrink-0 z-20">
@@ -55,12 +59,14 @@ export function ChannelHeader({
         {isPrivileged && channel.name.toLowerCase() !== 'general' && (
           <div className="flex items-center gap-1 border-r border-white/10 pr-3 mr-1">
             <button 
+              onClick={onAddMemberClick}
               className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-white/5 rounded-md transition-all group relative"
             >
               <UserPlus className="w-4 h-4" />
               <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black text-xs text-white px-2 py-1 rounded border border-white/10 opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none">Add Member</span>
             </button>
             <button 
+              onClick={onRoleAssignmentClick}
               className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-white/5 rounded-md transition-all group relative"
             >
               <Shield className="w-4 h-4" />
