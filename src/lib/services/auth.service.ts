@@ -3,7 +3,7 @@ import { api } from "../api";
 export const AuthService = {
   // 1. Google OAuth Trigger
   loginWithGoogle: () => {
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+const backendUrl = process.env.NEXT_PUBLIC_API_URL;
     window.location.assign(`${backendUrl}/auth/google`);
   },
 

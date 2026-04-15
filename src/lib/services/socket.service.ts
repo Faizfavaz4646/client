@@ -6,11 +6,12 @@ class SocketService {
   // 1. Connect to the server
   connect() {
     if (!this.socket) {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
-      const backendUrl = apiUrl.replace('/api/v1', '');
-      this.socket = io(backendUrl, {
-        transports: ['websocket', 'polling']
-      });
+   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+this.socket = io(backendUrl, {
+  transports: ['websocket', 'polling']
+});
 
       this.socket.on("connect", () => {
         console.log("✅ Socket connected with ID:", this.socket?.id);
