@@ -25,4 +25,10 @@ export const OrganizationService = {
     const response = await api.get(`/organizations/${orgId}/members`);
     return response.data;
   },
+
+  // 5. Get roles of an organization
+  getOrgRoles: async (orgId: string) => {
+    const response = await api.get(`/organizations/${orgId}/roles`);
+    return response.data;
+  },
 };
