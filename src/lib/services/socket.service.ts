@@ -7,8 +7,7 @@ class SocketService {
   connect() {
     if (!this.socket) {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
-                         process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 
-                         "http://localhost:5000";
+                         process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '');
       
       let token = null;
       if (typeof window !== "undefined") {
