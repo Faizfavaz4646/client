@@ -6,12 +6,25 @@ class SocketService {
   // 1. Connect to the server
   connect() {
     if (!this.socket) {
-   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
+                         process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 
+                         "http://localhost:5000";
+      
+      let token = null;
+      if (typeof window !== "undefined") {
+        const storageStr = localStorage.getItem("synq-auth-storage");
+        if (storageStr) {
+          try {
+            const parsed = JSON.parse(storageStr);
+            token = parsed.state.accessToken;
+          } catch (e) {}
+        }
+      }
 
-this.socket = io(backendUrl, {
-  transports: ['websocket', 'polling']
-});
+      this.socket = io(backendUrl, {
+        transports: ["websocket", "polling"],
+        auth: { token },
+      });
 
       this.socket.on("connect", () => {
         console.log("✅ Socket connected with ID:", this.socket?.id);
