@@ -20,6 +20,8 @@ export default function KanbanBoard({ channelId, isPrivileged }: { channelId: st
   useEffect(() => {
     fetchTasks(channelId);
 
+    socketService.connect();
+
     const handleTaskCreated = (data: { task: ITask }) => {
       const taskChannelId = typeof data.task.channelId === 'string' 
         ? data.task.channelId 
