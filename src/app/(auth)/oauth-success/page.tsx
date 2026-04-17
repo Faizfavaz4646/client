@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { AuthService } from '@/lib/services/auth.service';
 
-export default function OAuthSuccessPage() {
+function OAuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
@@ -42,12 +42,19 @@ export default function OAuthSuccessPage() {
     }
   }, [searchParams, router, setAccessToken, setUser]);
 
+  return null;
+}
+
+export default function OAuthSuccessPage() {
   return (
     <div className="min-h-screen bg-[#05050a] flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#3B66FF] mx-auto"></div>
         <p className="mt-4 text-slate-400 font-medium tracking-wide">SYNCING YOUR ACCOUNT...</p>
       </div>
+      <Suspense fallback={null}>
+        <OAuthContent />
+      </Suspense>
     </div>
   );
 }

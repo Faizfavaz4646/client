@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Edge middleware to protect private routes
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Grab the auth token from cookies 
   const token = request.cookies.get('accessToken')?.value;
 
