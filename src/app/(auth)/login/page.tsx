@@ -178,9 +178,6 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
       // Save token to Zustand (crucial for your Axios interceptor)
       useAuthStore.getState().setAccessToken(token);
 
-      // THE MAGIC FIX: Create a Vercel-friendly cookie so Next.js Middleware allows the redirect
-      document.cookie = `accessToken=${token}; path=/; max-age=86400; SameSite=Lax`;
-
       toast.success("Welcome back to SYNQ!");
 
       // Check if user is an Organization Founder (logged in via Workspace Login)
@@ -188,12 +185,15 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
 
       if (user.workspaces && user.workspaces.length > 0) {
         router.push(`/workspace/${user.workspaces[0].workspaceId}`);
+        router.refresh();
       } else if (isFounder) {
         // Founder needs to create their first workspace
         router.push("/workspace/setup");
+        router.refresh();
       } else {
         // Regular user needs an invite code
         router.push("/workspace/join");
+        router.refresh();
       }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: { message?: string } } } };
