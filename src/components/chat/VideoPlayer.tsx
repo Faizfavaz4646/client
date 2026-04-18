@@ -8,6 +8,10 @@ export default function VideoPlayer({ stream, isLocal = false, participant, chan
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      // Explicitly trigger play to bypass strict browser autoplay audio/video policies
+      videoRef.current.play().catch(e => {
+        console.warn("Video auto-play was prevented by the browser:", e);
+      });
     }
   }, [stream]);
 

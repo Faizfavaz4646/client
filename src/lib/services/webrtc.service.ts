@@ -33,6 +33,9 @@ class WebRTCService {
   public participants: Map<string, Pick<IWebRTCParticipant, 'userId' | 'cameraEnabled'>> = new Map();
   public onParticipantMetadataUpdate: ((participants: Map<string, Pick<IWebRTCParticipant, 'userId' | 'cameraEnabled'>>) => void) | null = null;
   public onParticipantJoined: ((socketId: string) => void) | null = null;
+  
+  // ICE Candidate Queue map to prevent premature injections before remote SDP is set
+  private iceQueues: Map<string, any[]> = new Map();
 
   // 1. Initialize User Media (Camera/Mic)
   async startLocalMedia(video = true, audio = true, options?: { startVideoMuted?: boolean; startAudioMuted?: boolean }): Promise<MediaStream> {
@@ -180,7 +183,7 @@ class WebRTCService {
     socketService.socket?.emit("webrtc:signal", signalPayload);
   }
 
-  // 5. Handle Incoming Signals (Professional Switch Architecture)
+  // 5. Handle Incoming Signals (Professional Switch Architecture & ICE Queue)
   private async handleIncomingSignal(senderSocketId: string, signal: any): Promise<void> {
     if (!this.currentRoomId) return;
 
@@ -190,33 +193,67 @@ class WebRTCService {
       peer = this.createPeerConnection(senderSocketId);
     }
 
-    // A. Handle ICE Candidates immediately (Early Return)
+    // A. Handle ICE Candidates immediately with Queueing Strategy
     if (signal.candidate) {
-      await peer.addIceCandidate(new RTCIceCandidate(signal));
+      try {
+        if (peer.remoteDescription && peer.remoteDescription.type) {
+          await peer.addIceCandidate(new RTCIceCandidate(signal));
+        } else {
+          // If offer/answer hasn't arrived yet, queue the ICE candidates
+          const queue = this.iceQueues.get(senderSocketId) || [];
+          queue.push(signal);
+          this.iceQueues.set(senderSocketId, queue);
+        }
+      } catch (err) {
+        console.error("Failed to add ICE Candidate:", err);
+      }
       return; 
     }
 
-    // A. Clean Switch statement for the SDP signal types
+    // B. Clean Switch statement for the SDP signal types
     switch (signal.type) {
       case "system_force_end":
         if (this.onCallForcedEnd) this.onCallForcedEnd();
         return;
 
       case "offer":
-        await peer.setRemoteDescription(new RTCSessionDescription(signal));
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        
-        const signalPayload: IWebRTCSignalPayload = {
-          targetSocketId: senderSocketId,
-          signal: answer,
-          roomId: this.currentRoomId
-        };
-        socketService.socket?.emit("webrtc:signal", signalPayload);
+        try {
+          await peer.setRemoteDescription(new RTCSessionDescription(signal));
+          
+          // Process any queued ICE candidates now that remote is set
+          const qOffer = this.iceQueues.get(senderSocketId) || [];
+          for (const c of qOffer) {
+            await peer.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.error("ICE Queue error:", e));
+          }
+          this.iceQueues.delete(senderSocketId);
+
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          
+          const signalPayload: IWebRTCSignalPayload = {
+            targetSocketId: senderSocketId,
+            signal: answer,
+            roomId: this.currentRoomId
+          };
+          socketService.socket?.emit("webrtc:signal", signalPayload);
+        } catch (err) {
+          console.error("Failed to handle offer SDP:", err);
+        }
         break;
 
       case "answer":
-        await peer.setRemoteDescription(new RTCSessionDescription(signal));
+        try {
+          await peer.setRemoteDescription(new RTCSessionDescription(signal));
+          
+          // Process any queued ICE candidates for the answer
+          const qAnswer = this.iceQueues.get(senderSocketId) || [];
+          for (const c of qAnswer) {
+            await peer.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.error("ICE Queue error:", e));
+          }
+          this.iceQueues.delete(senderSocketId);
+        } catch (err) {
+            console.error("Failed to handle answer SDP:", err);
+        }
         break;
 
       default:
