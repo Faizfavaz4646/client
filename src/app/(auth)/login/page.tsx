@@ -175,25 +175,24 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
       // Save user to Zustand
       setUser(user);
       
-      // Save token to Zustand (crucial for your Axios interceptor)
+      // Save token to Zustand
       useAuthStore.getState().setAccessToken(token);
+
+      // RESTORED FIX: The Render backend is failing to penetrate Next.js/Browser cross-origin cookie policies. 
+      // We MUST manually forcefully assign the cookie on the client so the Next.js edge middleware can see the JWT.
+      document.cookie = `accessToken=${token}; path=/; max-age=86400; SameSite=Lax`;
 
       toast.success("Welcome back to SYNQ!");
 
-      // Check if user is an Organization Founder (logged in via Workspace Login)
+      // Check if user is an Organization Founder
       const isFounder = user.organizations?.some((org: any) => org.orgId === user.id && org.role === 'admin');
 
       if (user.workspaces && user.workspaces.length > 0) {
-        router.push(`/workspace/${user.workspaces[0].workspaceId}`);
-        router.refresh();
+        window.location.href = `/workspace/${user.workspaces[0].workspaceId}`;
       } else if (isFounder) {
-        // Founder needs to create their first workspace
-        router.push("/workspace/setup");
-        router.refresh();
+        window.location.href = "/workspace/setup";
       } else {
-        // Regular user needs an invite code
-        router.push("/workspace/join");
-        router.refresh();
+        window.location.href = "/workspace/join";
       }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: { message?: string } } } };
