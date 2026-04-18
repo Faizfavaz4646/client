@@ -168,8 +168,19 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
       const endpoint = loginMode === "org" ? "/auth/login-org" : "/auth/login";
       const res = await api.post(endpoint, data);
 
+      // Extract BOTH the user and the token from the response
       const user = res.data.data.user;
+      const token = res.data.data.accessToken;
+
+      // Save user to Zustand
       setUser(user);
+      
+      // Save token to Zustand (crucial for your Axios interceptor)
+      useAuthStore.getState().setAccessToken(token);
+
+      // THE MAGIC FIX: Create a Vercel-friendly cookie so Next.js Middleware allows the redirect
+      document.cookie = `accessToken=${token}; path=/; max-age=86400; SameSite=Lax`;
+
       toast.success("Welcome back to SYNQ!");
 
       // Check if user is an Organization Founder (logged in via Workspace Login)
