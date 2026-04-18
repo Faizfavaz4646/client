@@ -186,14 +186,12 @@ function LoginForm({ toggleView }: { toggleView: () => void }) {
       // Check if user is an Organization Founder (logged in via Workspace Login)
       const isFounder = user.organizations?.some((org: any) => org.orgId === user.id && org.role === 'admin');
 
-      if (user.workspaces && user.workspaces.length > 0) {
-        router.push(`/workspace/${user.workspaces[0].workspaceId}`);
+     if (user.workspaces && user.workspaces.length > 0) {
+        window.location.href = `/workspace/${user.workspaces[0].workspaceId}`;
       } else if (isFounder) {
-        // Founder needs to create their first workspace
-        router.push("/workspace/setup");
+        window.location.href = "/workspace/setup";
       } else {
-        // Regular user needs an invite code
-        router.push("/workspace/join");
+        window.location.href = "/workspace/join";
       }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: { message?: string } } } };
