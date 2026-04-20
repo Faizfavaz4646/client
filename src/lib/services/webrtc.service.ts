@@ -9,13 +9,28 @@ import {
   IWebRTCParticipant
 } from "@/types/webrtc"; 
 
-// Standard STUN servers to help peers find each other
-//NAT hides a device’s private IP behind a public IP, making direct peer-to-peer communication difficult.
-//STUN helps a device discover its public IP address so peers can attempt direct communication.”
+// Standard STUN servers (Local/Simple Networks) + TURN servers (Strict Production Networks)
 const ICE_SERVERS = {
   iceServers: [
+    // STUN: Helps discover public IP
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
+    // TURN: Relays traffic if direct P2P fails (Corporate Firewalls, Mobile Networks)
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    }
   ],
 };
 
