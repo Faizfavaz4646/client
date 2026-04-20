@@ -17,8 +17,8 @@ export default function KanbanColumn({ status, tasks, onEditTask }: KanbanColumn
   });
 
   return (
-    <div className="flex flex-col flex-1 min-w-[300px] h-full bg-neutral-900/40 rounded-xl overflow-hidden border border-white/5">
-      <div className="p-4 border-b border-white/5 flex items-center justify-between bg-neutral-900/80">
+    <div className="flex flex-col flex-1 min-w-[300px] h-full bg-[#13172e] rounded-xl overflow-hidden border border-white/5 shadow-2xl">
+      <div className="p-4 border-b border-indigo-500/20 flex items-center justify-between bg-[#191f3a]">
         <h3 className="font-semibold text-white/90 flex items-center gap-2">
           {status === TaskStatus.TODO && <><CircleDashed className="w-4 h-4 text-slate-400" /> To Do</>}
           {status === TaskStatus.ONGOING && <><Timer className="w-4 h-4 text-indigo-400" /> In Progress</>}

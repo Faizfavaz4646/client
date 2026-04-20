@@ -93,7 +93,7 @@ export default function KanbanBoard({ channelId, isPrivileged }: { channelId: st
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-neutral-950 p-6">
+    <div className="flex flex-col h-full w-full bg-[#0b0f1f] p-6 rounded-tl-2xl">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Tasks</h1>
