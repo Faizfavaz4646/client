@@ -19,7 +19,7 @@
     "@tiptap/starter-kit": "^3.22.4",
     "axios": "^1.13.6",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
+    "date-fns": "^3.6.0",
     "framer-motion": "^12.34.4",
     "lucide-react": "^0.576.0",
     "next": "16.1.6",
@@ -44,10 +44,5 @@
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "overrides": {
-    "react-day-picker": {
-      "date-fns": "$date-fns"
-    }
   }
 }
