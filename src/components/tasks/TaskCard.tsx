@@ -60,8 +60,8 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className={`relative group bg-[#111113] border overflow-hidden rounded-xl p-4 cursor-grab active:cursor-grabbing hover:border-white/20 transition-all ${
-        task.status === TaskStatus.COMPLETED ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-white/10'
+      className={`relative group bg-[#0c0c0e] border overflow-hidden rounded-xl p-4 cursor-grab active:cursor-grabbing hover:border-indigo-400/30 transition-all ${
+        task.status === TaskStatus.COMPLETED ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-indigo-500/20 shadow-sm'
       } ${
         isDragging ? 'opacity-50 z-50 ring-2 ring-indigo-500 scale-105' : ''
       }`}
@@ -114,7 +114,7 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
 
               {isMenuOpen && (
                 <div 
-                  className="absolute right-0 top-6 w-32 bg-neutral-800 border border-white/10 rounded-lg shadow-xl z-10 py-1 overflow-hidden"
+                  className="absolute right-0 top-6 w-32 bg-[#18181b] border border-white/10 rounded-lg shadow-xl z-10 py-1 overflow-hidden"
                   onPointerDown={(e) => e.stopPropagation()} // Prevent dragging when clicking menu
                 >
                   <button
@@ -124,7 +124,7 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
                       setIsMenuOpen(false);
                       onEdit && onEdit();
                     }}
-                    className="w-full text-left px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-700 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 text-sm text-neutral-200 hover:bg-[#27272a] flex items-center gap-2 transition-colors"
                   >
                     <Edit2 size={14} /> Edit
                   </button>
@@ -164,7 +164,7 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
           <div className="flex -space-x-2">
             {task.assignees && task.assignees.length > 0 ? (
               task.assignees.slice(0, 3).map((assignee: any, idx: number) => (
-                <div key={idx} className="w-7 h-7 rounded-full border-2 border-[#111113] overflow-hidden bg-neutral-800 flex items-center justify-center relative shrink-0" title={assignee.name}>
+                <div key={idx} className="w-7 h-7 rounded-full border-2 border-[#0c0c0e] overflow-hidden bg-[#18181b] flex items-center justify-center relative shrink-0 shadow-sm" title={assignee.name}>
                   {assignee.avatar ? (
                     <img src={assignee.avatar} alt={assignee.name} className="w-full h-full object-cover" />
                   ) : (
@@ -177,7 +177,7 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
             ) : (
               <button 
                 onPointerDown={(e) => { e.stopPropagation(); onEdit && onEdit(); }}
-                className="w-6 h-6 rounded-full bg-neutral-800 border-2 border-dashed border-neutral-600 flex items-center justify-center text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors cursor-pointer"
+                className="w-6 h-6 rounded-full bg-[#18181b] border-2 border-dashed border-indigo-500/30 flex items-center justify-center text-indigo-300 hover:text-white hover:border-indigo-400 transition-colors cursor-pointer"
                 title="Assign User"
               >
                 <UserPlus size={10} />

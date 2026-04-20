@@ -192,7 +192,7 @@ export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMem
     <div className="flex flex-col h-full w-full bg-[#0a0a0a] p-4 relative overflow-hidden">
       
       {/* 📹 The Video Grid */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-[minmax(200px,1fr)] max-h-[calc(100%-80px)] overflow-y-auto custom-scrollbar">
+      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max max-h-[calc(100%-80px)] overflow-y-auto custom-scrollbar content-center px-4">
         {/* Local User */}
         {localStream && (
           <VideoPlayer stream={localStream} isLocal={true} currentUser={user} isVideoOff={!isVideoOn} />

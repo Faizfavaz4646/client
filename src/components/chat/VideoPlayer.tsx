@@ -47,7 +47,7 @@ export default function VideoPlayer({ stream, isLocal = false, participant, chan
   const finalDisplayName = isLocal ? "You" : name;
 
   return (
-    <div className="relative w-full h-full bg-black rounded-xl overflow-hidden border border-white/10 shadow-lg">
+    <div className="relative w-full aspect-square max-h-[70vh] bg-[#0b0f1f] rounded-2xl overflow-hidden border border-white/10 shadow-xl group">
       <video
         ref={videoRef}
         autoPlay

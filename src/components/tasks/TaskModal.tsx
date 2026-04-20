@@ -10,6 +10,8 @@ import { X, Flag, UserPlus, Check, ChevronDown } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { WorkspaceService } from '@/lib/services/workspace.service';
 import { OrganizationService } from '@/lib/services/organization.service';
+import RichTextEditor from './RichTextEditor';
+import { DatePicker } from '@/components/ui/DatePicker';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
@@ -171,7 +173,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="bg-[#111113] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar"
+            className="bg-[#11183a] border border-indigo-500/20 rounded-2xl p-6 w-full max-w-lg shadow-[0_0_50px_rgba(99,102,241,0.15)] relative max-h-[90vh] overflow-y-auto custom-scrollbar"
           >
             <button
               onClick={onClose}
@@ -190,20 +192,25 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                 <input
                   {...register('title')}
                   autoFocus
-                  className="w-full bg-neutral-900 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                  className="w-full bg-[#1c2242] border border-indigo-500/20 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-400/50 focus:border-transparent outline-none transition-all shadow-inner"
                   placeholder="What needs to be done?"
                 />
                 {errors.title && <p className="text-red-400 text-xs mt-1">{errors.title.message}</p>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-1.5">Description</label>
-                <textarea
-                  {...register('description')}
-                  className="w-full bg-neutral-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all min-h-[100px] resize-y"
-                  placeholder="Add any details or markdown..."
-                />
-              </div>
+           <div>
+  <label className="block text-sm font-medium text-neutral-300 mb-1.5">Description</label>
+  <Controller
+    name="description"
+    control={control}
+    render={({ field }) => (
+      <RichTextEditor 
+        value={field.value || ''} 
+        onChange={field.onChange} 
+      />
+    )}
+  />
+</div>
 
               <div className="grid grid-cols-2 gap-5">
                 {/* Custom Priority Dropdown */}
@@ -211,7 +218,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                   <label className="block text-sm font-medium text-neutral-300 mb-1.5">Priority</label>
                   <div 
                     onClick={() => setIsPriorityDropdownOpen(!isPriorityDropdownOpen)}
-                    className="w-full bg-neutral-900 border border-white/10 rounded-lg px-4 py-2.5 flex items-center justify-between cursor-pointer hover:border-white/20 transition-all select-none"
+                    className="w-full bg-[#1c2242] shadow-inner border border-indigo-500/20 rounded-lg px-4 py-2.5 flex items-center justify-between cursor-pointer hover:border-indigo-500/40 transition-all select-none"
                   >
                     <div className={`flex items-center gap-2 text-sm font-bold uppercase ${priorityDetails[selectedPriority].color}`}>
                         <Flag size={14} className="stroke-[3px]" />
@@ -221,7 +228,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                   </div>
                   
                   {isPriorityDropdownOpen && (
-                    <div className="absolute top-[72px] left-0 w-full bg-[#1c1c1f] border border-white/10 rounded-lg shadow-xl z-50 overflow-hidden py-1">
+                    <div className="absolute top-[72px] left-0 w-full bg-[#252b4d] shadow-2xl border border-indigo-500/20 rounded-lg z-50 overflow-hidden py-1">
                         {Object.values(TaskPriority).map(p => (
                             <div 
                                 key={p}
@@ -238,10 +245,16 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
 
                 <div>
                   <label className="block text-sm font-medium text-neutral-300 mb-1.5">Due Date</label>
-                  <input
-                    type="date"
-                    {...register('dueDate')}
-                    className="w-full bg-neutral-900 border border-white/10 rounded-lg px-4 py-2.5 text-neutral-200 outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark]"
+                  <Controller
+                    name="dueDate"
+                    control={control}
+                    render={({ field }) => (
+                      <DatePicker
+                        value={field.value ? new Date(field.value) : undefined}
+                        onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
+                        placeholder="Select due date"
+                      />
+                    )}
                   />
                 </div>
               </div>
@@ -254,7 +267,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                  </label>
                  <div 
                     onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
-                    className="w-full bg-neutral-900 border border-white/10 rounded-lg p-2 flex items-center min-h-[46px] cursor-pointer hover:border-white/20 transition-all flex-wrap gap-2"
+                    className="w-full bg-[#1c2242] border border-indigo-500/20 rounded-lg p-2 flex items-center min-h-[46px] cursor-pointer hover:border-indigo-500/40 transition-all flex-wrap gap-2 shadow-inner"
                   >
                     {selectedAssignees.length === 0 && (
                         <div className="text-neutral-500 px-2 text-sm flex items-center gap-2">
@@ -265,7 +278,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                         const memberInfo = members.find(m => m.id === id);
                         if (!memberInfo) return null;
                         return (
-                            <div key={id} className="flex items-center gap-2 bg-[#1c1c1f] border border-white/5 pr-2 rounded-full overflow-hidden shrink-0">
+                            <div key={id} className="flex items-center gap-2 bg-[#252b4d] border border-indigo-500/20 pr-2 rounded-full overflow-hidden shrink-0 shadow-sm">
                                 {memberInfo.avatar ? (
                                     <img src={memberInfo.avatar} className="w-5 h-5 object-cover" />
                                 ) : (
@@ -280,7 +293,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                   </div>
 
                   {isAssigneeDropdownOpen && (
-                      <div className="absolute top-[80px] left-0 w-full bg-[#1c1c1f] border border-white/10 rounded-lg shadow-xl z-50 overflow-hidden py-2 max-h-48 overflow-y-auto custom-scrollbar">
+                      <div className="absolute top-[80px] left-0 w-full bg-[#252b4d] border border-indigo-500/20 rounded-lg shadow-2xl z-50 overflow-hidden py-2 max-h-48 overflow-y-auto custom-scrollbar">
                            {members.length === 0 && (
                                <div className="px-4 py-3 text-sm text-neutral-500 text-center">No workspace members found</div>
                            )}
