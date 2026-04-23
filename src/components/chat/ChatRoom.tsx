@@ -481,7 +481,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                     <div className={`flex flex-wrap gap-1 mt-1 z-10 ${isMe ? 'justify-end' : 'justify-start'} ${(msg.reactions && msg.reactions.length > 0) || activeReactMenuId === (msg._id || msg.id) ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100 transition-opacity'}`}>
                       {msg.reactions?.map(r => {
                          const hasReacted = r.users?.some(u => {
-                           const possibleId = u?._id || u?.id || u?.userId;
+                           const possibleId = u?._id || u?.id;
                            return activeUserId && possibleId && String(possibleId).trim().toLowerCase() === activeUserId;
                          });
                          return (
