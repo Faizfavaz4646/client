@@ -5,7 +5,7 @@ export class MessageService {
         return api.get(`/messages/${channelId}`);
     }
 
-    static async createMessage(data: { channelId: string; content: string }) {
+    static async createMessage(data: { channelId: string; content?: string; type?: string; attachments?: any[] }) {
         return api.post('/messages', data);
     }
 

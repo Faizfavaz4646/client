@@ -20,6 +20,7 @@ import type { IUserSafe } from '@/types/auth';
 import { AddChannelMemberDropdown } from '@/components/chat/AddChannelMemberDropdown';
 import { ChannelRoleAssignmentDropdown } from '@/components/chat/ChannelRoleAssignmentDropdown';
 import InviteLinkModal from '@/components/chat/InviteLinkModal';
+import WorkspaceSettingsModal from '@/components/workspace/settings/WorkspaceSettingsModal';
 import { toast } from 'sonner';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   const [channelToAddMemberId, setChannelToAddMemberId] = React.useState<string | null>(null);
   const [channelToAssignRolesId, setChannelToAssignRolesId] = React.useState<string | null>(null);
   const [isInviteLinkModalOpen, setIsInviteLinkModalOpen] = React.useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = React.useState(false);
 
   // Extract workspace & channel context from URL dynamically
   const activeWorkspaceId = pathname?.split('/workspace/')[1]?.split('/')[0] || pathname?.split('/')[2];
@@ -276,7 +278,13 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
 
         <div className="w-8 h-[1px] bg-slate-800/80 my-2"></div>
 
-        <button className="w-12 h-12 rounded-xl flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all mb-1 group">
+        <button 
+          onClick={() => {
+            if (isPrivileged) setIsSettingsModalOpen(true);
+            else toast.error("Only workspace admins can access settings");
+          }}
+          className="w-12 h-12 rounded-xl flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all mb-1 group"
+        >
           <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
         </button>
         <button className="w-12 h-12 rounded-xl flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all mb-1 group">
@@ -410,6 +418,18 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
             workspaceId={activeWorkspaceId}
             isOwner={isOrgFounder}
             onClose={() => setIsInviteLinkModalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ─── WORKSPACE SETTINGS MODAL ─── */}
+      <AnimatePresence>
+        {isSettingsModalOpen && activeWorkspaceId && (
+          <WorkspaceSettingsModal 
+            isOpen={isSettingsModalOpen}
+            onClose={() => setIsSettingsModalOpen(false)}
+            workspaceId={activeWorkspaceId}
+            workspace={activeWorkspace}
           />
         )}
       </AnimatePresence>
@@ -682,10 +702,8 @@ function CreateWorkspaceForm({
       setNewWorkspaceId(workspaceId);
 
       // 2. Generate Invite Code for this workspace
-      const inviteRes = await api.post('/invites', {
-        organizationId: wsRes.data.orgId,
-        workspaceId: workspaceId,
-        expiresInHours: 168, // 1 week
+      const inviteRes = await api.post(`/workspaces/${workspaceId}/invites`, {
+        expiresIn: "7d",
         maxUses: 100
       });
 

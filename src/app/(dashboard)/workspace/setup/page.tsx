@@ -36,22 +36,31 @@ export default function WorkspaceSetupPage() {
 
       // 1. Create Workspace
       const orgAdmin = user?.organizations?.find((o: any) => o.role === 'admin' || o.role === 'owner');
+      console.log("[DEBUG] Creating workspace for org:", orgAdmin?.orgId || user?.id);
 
       const wsRes = await WorkspaceService.createWorkspace({
         name,
-        orgId: orgAdmin?.orgId
+        orgId: orgAdmin?.orgId || user?.id
       });
 
-      const workspaceData = wsRes.data;
-      const workspaceId = workspaceData._id;
+      console.log("[DEBUG] Workspace created:", wsRes);
+      
+      // Restore workspaceData for later use
+      const workspaceData = wsRes.data?.workspace || wsRes.workspace || wsRes.data || wsRes;
+      const workspaceId = workspaceData?._id || workspaceData?.id;
+
+      if (!workspaceId) {
+        console.error("[DEBUG] Failed to find ID in:", wsRes);
+        throw new Error("Workspace ID was not returned from server");
+      }
 
       // 2. Generate Invite Code for this workspace
-      const inviteRes = await api.post('/invites', {
-        organizationId: workspaceData.orgId || orgAdmin?.orgId,
-        workspaceId: workspaceId,
-        expiresInHours: 168, // 1 week
+      console.log("[DEBUG] Generating invite for workspace:", workspaceId);
+      const inviteRes = await api.post(`/workspaces/${workspaceId}/invites`, {
+        expiresIn: "7d",
         maxUses: 100
       });
+      console.log("[DEBUG] Invite generated:", inviteRes.data);
 
       setCreatedInvite(inviteRes.data.data.invite.code);
 

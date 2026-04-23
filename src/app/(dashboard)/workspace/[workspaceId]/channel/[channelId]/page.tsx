@@ -94,15 +94,21 @@ export default function ChannelPage() {
         const currentChannel = res.data.data.channels.find((c: any) => c._id === channelId || c.id === channelId);
         setChannel(currentChannel);
 
-        // 2. Fetch workspace/org details to get the REAL organizationId for members list
-        const workspaceRes = await WorkspaceService.getWorkspaceById(workspaceId as string);
-        const orgId = workspaceRes.data?.organizationId || workspaceRes.data?.orgId || workspaceId;
-        setResolvedOrgId(orgId as string);
+        // 2. Fetch workspace/org details & members (Wrap in sub-try to prevent crash)
+        try {
+          const workspaceRes = await WorkspaceService.getWorkspaceById(workspaceId as string);
+          // Handle both { success, data } and raw data responses
+          const workspaceInfo = workspaceRes.data || workspaceRes.workspace || workspaceRes;
+          const orgId = workspaceInfo?.organizationId || workspaceInfo?.orgId || workspaceId;
+          setResolvedOrgId(orgId as string);
 
-        // 3. Fetch workspace members for name resolution (Address Book)
-        const membersRes = await OrganizationService.getOrganizationMembers(orgId as string);
-        if (membersRes.data) {
-          setWorkspaceMembers(membersRes.data.members || membersRes.data);
+          const membersRes = await OrganizationService.getOrganizationMembers(orgId as string);
+          if (membersRes) {
+            const memberData = membersRes.data || membersRes.members || (Array.isArray(membersRes) ? membersRes : null);
+            if (memberData) setWorkspaceMembers(Array.isArray(memberData) ? memberData : memberData.members || []);
+          }
+        } catch (memberErr) {
+          console.warn("Non-critical: Failed to fetch address book/org details", memberErr);
         }
       } catch (err) {
         console.error("Failed to fetch channel or members (ignoring for UI)", err);

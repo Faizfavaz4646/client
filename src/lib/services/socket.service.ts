@@ -51,9 +51,23 @@ class SocketService {
   }
 
   // 4. Send a message
-  sendMessage(channelId: string, content: string, type: string = "TEXT", attachments: any[] = []) {
+  sendMessage(channelId: string, content: string, type: string = "TEXT", attachments: any[] = [], replyTo?: string) {
     if (this.socket) {
-      this.socket.emit("send-message", { channelId, content, type, attachments });
+      this.socket.emit("send-message", { channelId, content, type, attachments, replyTo });
+    }
+  }
+
+  // 4a. Pin/Unpin Message
+  pinMessage(channelId: string, messageId: string, isPinned: boolean) {
+    if (this.socket) {
+      this.socket.emit("pin-message", { channelId, messageId, isPinned });
+    }
+  }
+
+  // 4b. React to Message
+  reactMessage(channelId: string, messageId: string, emoji: string) {
+    if (this.socket) {
+      this.socket.emit("react-message", { channelId, messageId, emoji });
     }
   }
 
@@ -93,6 +107,20 @@ class SocketService {
     if (this.socket) {
       this.socket.off("message-deleted");
       this.socket.on("message-deleted", callback);
+    }
+  }
+
+  onMessagePinned(callback: (message: any) => void) {
+    if (this.socket) {
+      this.socket.off("message-pinned");
+      this.socket.on("message-pinned", callback);
+    }
+  }
+
+  onMessageReaction(callback: (data: { messageId: string, reactions: any[] }) => void) {
+    if (this.socket) {
+      this.socket.off("message-reaction");
+      this.socket.on("message-reaction", callback);
     }
   }
 

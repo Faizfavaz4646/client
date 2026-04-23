@@ -18,6 +18,18 @@ export interface Message {
         name: string;
         fileType: string;
     }[];
+    
+    // Advanced Chat Payload
+    isPinned?: boolean;
+    pinnedAt?: string;
+    pinnedBy?: UserBasicInfo;
+    reactions?: {
+        _id?: string;
+        emoji: string;
+        users: UserBasicInfo[];
+    }[];
+    replyTo?: Message | null;
+    
     senderId?: UserBasicInfo;
     createdAt?: string;
     timestamp?: string | Date;
