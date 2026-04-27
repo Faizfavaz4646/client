@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TaskStatus, ITask, TaskPriority } from '@/types/task.types';
@@ -26,7 +27,10 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
   const { deleteTaskLocally } = useTaskStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const user = useAuthStore(state => state.user);
-  const isPrivileged = user?.organizations?.some((org: any) => org.role === 'admin' || org.role === 'owner');
+  const params = useParams();
+  const workspaceId = params?.workspaceId as string;
+  const isPrivileged = user?.organizations?.some((org: any) => org.role === 'admin' || org.role === 'owner') ||
+    user?.workspaces?.some((w: any) => (w.workspaceId === workspaceId || w._id === workspaceId) && (w.role === 'admin' || w.role === 'owner'));
 
 
   const {

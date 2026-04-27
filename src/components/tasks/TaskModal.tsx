@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Flag, UserPlus, Check, ChevronDown } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { WorkspaceService } from '@/lib/services/workspace.service';
+import { workspaceSettingsService } from '@/lib/services/workspaceSettings.service';
 import { OrganizationService } from '@/lib/services/organization.service';
 import RichTextEditor from './RichTextEditor';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -50,11 +51,9 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
     if (isOpen && workspaceId) {
       const loadMembers = async () => {
         try {
-          const workspaceRes = await WorkspaceService.getWorkspaceById(workspaceId);
-          const resolvedOrgId = workspaceRes.data?.organizationId || workspaceRes.data?.orgId || workspaceId;
-          const membersRes = await OrganizationService.getOrganizationMembers(resolvedOrgId);
-          if (membersRes.data) {
-            setMembers(membersRes.data.members || membersRes.data);
+          const membersRes = await workspaceSettingsService.getMembers(workspaceId, 1, 1000, '');
+          if (membersRes.data?.members) {
+            setMembers(membersRes.data.members);
           }
         } catch (e) {
           console.error("Failed to fetch workspace members for assignees", e);

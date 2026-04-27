@@ -20,6 +20,7 @@ import type { IUserSafe } from '@/types/auth';
 import { AddChannelMemberDropdown } from '@/components/chat/AddChannelMemberDropdown';
 import { ChannelRoleAssignmentDropdown } from '@/components/chat/ChannelRoleAssignmentDropdown';
 import InviteLinkModal from '@/components/chat/InviteLinkModal';
+import WorkspaceSettingsModal from '@/components/workspace/settings/WorkspaceSettingsModal';
 import { toast } from 'sonner';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
@@ -41,13 +42,40 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   const [channelToAddMemberId, setChannelToAddMemberId] = React.useState<string | null>(null);
   const [channelToAssignRolesId, setChannelToAssignRolesId] = React.useState<string | null>(null);
   const [isInviteLinkModalOpen, setIsInviteLinkModalOpen] = React.useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = React.useState(false);
 
   // Extract workspace & channel context from URL dynamically
   const activeWorkspaceId = pathname?.split('/workspace/')[1]?.split('/')[0] || pathname?.split('/')[2];
   const channelMatch = pathname?.match(/\/channel\/([^\/]+)/);
   const activeChannelId = channelMatch ? channelMatch[1] : null;
 
-  const activeWorkspace = user?.workspaces?.find(w => w.workspaceId === activeWorkspaceId);
+  const [workspacesDetails, setWorkspacesDetails] = React.useState<Record<string, any>>({});
+
+  // 0. Fetch full workspace details to get avatarUrls (since auth/me doesn't include them)
+  React.useEffect(() => {
+    if (!user?.workspaces) return;
+    const fetchDetails = async () => {
+      let changed = false;
+      const newDetails = { ...workspacesDetails };
+      
+      await Promise.all(user.workspaces.map(async (w) => {
+        if (!newDetails[w.workspaceId]) {
+          try {
+            const res = await api.get(`/workspaces/${w.workspaceId}`);
+            if (res.data?.data?.workspace) {
+              newDetails[w.workspaceId] = res.data.data.workspace;
+              changed = true;
+            }
+          } catch (e) {}
+        }
+      }));
+
+      if (changed) setWorkspacesDetails(newDetails);
+    };
+    fetchDetails();
+  }, [user?.workspaces]);
+
+  const activeWorkspace = workspacesDetails[activeWorkspaceId] || user?.workspaces?.find(w => w.workspaceId === activeWorkspaceId);
   const displayName = activeWorkspace ? activeWorkspace.name : "Workspace";
 
   // 1. Restore session on mount if user is missing
@@ -163,9 +191,10 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   };
 
   // Permissions Logic
-  // Simplify admin checks by scanning the user's organization array since 'admin' role cascades.
-  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
-  const isOrgFounder = !!isPrivileged;
+  // Simplify admin checks by scanning the user's organization array and their workspace roles.
+  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner') ||
+    user?.workspaces?.some(w => w.workspaceId === activeWorkspaceId && (w.role === 'admin' || w.role === 'owner'));
+  const isOrgFounder = !!user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
   const activeOrgId = (activeWorkspace as any)?.orgId || user?.organizations?.[0]?.orgId;
 
   // Loading State (Premium Spinner)
@@ -235,10 +264,14 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
                   <button
                     style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: "1px" }}
                     className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg transition-all duration-300 ${isActive
-                      ? `${gradientClass} shadow-[0_0_20px_rgba(255,255,255,0.3)] text-white ring-2 ring-white/30 scale-105`
-                      : `${gradientClass} opacity-70 hover:opacity-100 hover:scale-[1.02] text-white/90`
+                      ? `${gradientClass} shadow-[0_0_20px_rgba(255,255,255,0.3)] text-white ring-2 ring-white/30 scale-105 overflow-hidden`
+                      : `${gradientClass} opacity-70 hover:opacity-100 hover:scale-[1.02] text-white/90 overflow-hidden`
                       }`}>
-                    {initials}
+                    {workspacesDetails[ws.workspaceId]?.avatarUrl ? (
+                      <img src={workspacesDetails[ws.workspaceId].avatarUrl} alt={ws.name} className="w-full h-full object-cover" />
+                    ) : (
+                      initials
+                    )}
                   </button>
                 </Link>
                 {isActive && (
@@ -276,7 +309,13 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
 
         <div className="w-8 h-[1px] bg-slate-800/80 my-2"></div>
 
-        <button className="w-12 h-12 rounded-xl flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all mb-1 group">
+        <button 
+          onClick={() => {
+            if (isPrivileged) setIsSettingsModalOpen(true);
+            else toast.error("Only workspace admins can access settings");
+          }}
+          className="w-12 h-12 rounded-xl flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all mb-1 group"
+        >
           <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
         </button>
         <button className="w-12 h-12 rounded-xl flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all mb-1 group">
@@ -410,6 +449,18 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
             workspaceId={activeWorkspaceId}
             isOwner={isOrgFounder}
             onClose={() => setIsInviteLinkModalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ─── WORKSPACE SETTINGS MODAL ─── */}
+      <AnimatePresence>
+        {isSettingsModalOpen && activeWorkspaceId && (
+          <WorkspaceSettingsModal 
+            isOpen={isSettingsModalOpen}
+            onClose={() => setIsSettingsModalOpen(false)}
+            workspaceId={activeWorkspaceId}
+            workspace={activeWorkspace}
           />
         )}
       </AnimatePresence>
@@ -682,10 +733,8 @@ function CreateWorkspaceForm({
       setNewWorkspaceId(workspaceId);
 
       // 2. Generate Invite Code for this workspace
-      const inviteRes = await api.post('/invites', {
-        organizationId: wsRes.data.orgId,
-        workspaceId: workspaceId,
-        expiresInHours: 168, // 1 week
+      const inviteRes = await api.post(`/workspaces/${workspaceId}/invites`, {
+        expiresIn: "7d",
         maxUses: 100
       });
 

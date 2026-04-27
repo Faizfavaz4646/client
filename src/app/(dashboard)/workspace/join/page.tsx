@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
@@ -17,6 +17,16 @@ export default function JoinWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [successWsName, setSuccessWsName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const codeParam = params.get('code');
+      if (codeParam) {
+        setInviteCode(codeParam.toUpperCase());
+      }
+    }
+  }, []);
 
   const handleJoin = async () => {
     const trimmed = inviteCode.trim();
