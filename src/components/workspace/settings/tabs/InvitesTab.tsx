@@ -56,12 +56,26 @@ export default function InvitesTab({ workspaceId }: { workspaceId: string }) {
     }
   };
 
-  const copyToClipboard = (code: string) => {
+  const copyToClipboard = async (code: string) => {
     const link = `${window.location.origin}/workspace/join?code=${code}`;
-    navigator.clipboard.writeText(link);
-    setCopiedId(code);
-    setTimeout(() => setCopiedId(null), 2000);
-    toast.success('Invite link copied to clipboard');
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = link;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopiedId(code);
+      setTimeout(() => setCopiedId(null), 2000);
+      toast.success('Invite link copied to clipboard');
+    } catch (err) {
+      toast.error('Failed to copy link. Please copy manually.');
+    }
   };
 
   return (
