@@ -15,7 +15,8 @@ export interface IWorkspaceSettingsPermissions {
 }
 
 export interface IWorkspaceSettingsInvite {
-  _id: string;
+  _id?: string;
+  id?: string;
   code: string;
   createdBy: { _id: string; name: string };
   maxUses: number;
