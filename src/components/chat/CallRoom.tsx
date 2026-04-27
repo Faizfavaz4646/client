@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { webrtcService } from "@/lib/services/webrtc.service";
 import VideoPlayer from "./VideoPlayer";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, AlertCircle, MonitorUp, MonitorOff } from "lucide-react";
@@ -10,7 +11,10 @@ import { useAuthStore } from "@/store/authStore";
 
 export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMembers, onClose }: CallRoomProps) {
   const user = useAuthStore((state) => state.user);
-  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
+  const params = useParams();
+  const workspaceId = params?.workspaceId as string;
+  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner') ||
+    user?.workspaces?.some((w: any) => (w.workspaceId === workspaceId || w._id === workspaceId) && (w.role === 'admin' || w.role === 'owner'));
 
   
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);

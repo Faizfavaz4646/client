@@ -62,7 +62,8 @@ export default function ChannelPage() {
   const [workspaceMembers, setWorkspaceMembers] = React.useState<any[]>([]);
   
   const user = useAuthStore((state) => state.user);
-  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
+  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner') ||
+    user?.workspaces?.some((w: any) => (w.workspaceId === workspaceId || w._id === workspaceId) && (w.role === 'admin' || w.role === 'owner'));
 
   // React hook managing all the complex socket connections and variables
   const callTracker = useChannelCallTracker(

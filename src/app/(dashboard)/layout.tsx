@@ -49,7 +49,33 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   const channelMatch = pathname?.match(/\/channel\/([^\/]+)/);
   const activeChannelId = channelMatch ? channelMatch[1] : null;
 
-  const activeWorkspace = user?.workspaces?.find(w => w.workspaceId === activeWorkspaceId);
+  const [workspacesDetails, setWorkspacesDetails] = React.useState<Record<string, any>>({});
+
+  // 0. Fetch full workspace details to get avatarUrls (since auth/me doesn't include them)
+  React.useEffect(() => {
+    if (!user?.workspaces) return;
+    const fetchDetails = async () => {
+      let changed = false;
+      const newDetails = { ...workspacesDetails };
+      
+      await Promise.all(user.workspaces.map(async (w) => {
+        if (!newDetails[w.workspaceId]) {
+          try {
+            const res = await api.get(`/workspaces/${w.workspaceId}`);
+            if (res.data?.data?.workspace) {
+              newDetails[w.workspaceId] = res.data.data.workspace;
+              changed = true;
+            }
+          } catch (e) {}
+        }
+      }));
+
+      if (changed) setWorkspacesDetails(newDetails);
+    };
+    fetchDetails();
+  }, [user?.workspaces]);
+
+  const activeWorkspace = workspacesDetails[activeWorkspaceId] || user?.workspaces?.find(w => w.workspaceId === activeWorkspaceId);
   const displayName = activeWorkspace ? activeWorkspace.name : "Workspace";
 
   // 1. Restore session on mount if user is missing
@@ -165,9 +191,10 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   };
 
   // Permissions Logic
-  // Simplify admin checks by scanning the user's organization array since 'admin' role cascades.
-  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
-  const isOrgFounder = !!isPrivileged;
+  // Simplify admin checks by scanning the user's organization array and their workspace roles.
+  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner') ||
+    user?.workspaces?.some(w => (w.workspaceId === activeWorkspaceId || w._id === activeWorkspaceId) && (w.role === 'admin' || w.role === 'owner'));
+  const isOrgFounder = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
   const activeOrgId = (activeWorkspace as any)?.orgId || user?.organizations?.[0]?.orgId;
 
   // Loading State (Premium Spinner)
@@ -237,10 +264,14 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
                   <button
                     style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: "1px" }}
                     className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg transition-all duration-300 ${isActive
-                      ? `${gradientClass} shadow-[0_0_20px_rgba(255,255,255,0.3)] text-white ring-2 ring-white/30 scale-105`
-                      : `${gradientClass} opacity-70 hover:opacity-100 hover:scale-[1.02] text-white/90`
+                      ? `${gradientClass} shadow-[0_0_20px_rgba(255,255,255,0.3)] text-white ring-2 ring-white/30 scale-105 overflow-hidden`
+                      : `${gradientClass} opacity-70 hover:opacity-100 hover:scale-[1.02] text-white/90 overflow-hidden`
                       }`}>
-                    {initials}
+                    {workspacesDetails[ws.workspaceId]?.avatarUrl ? (
+                      <img src={workspacesDetails[ws.workspaceId].avatarUrl} alt={ws.name} className="w-full h-full object-cover" />
+                    ) : (
+                      initials
+                    )}
                   </button>
                 </Link>
                 {isActive && (

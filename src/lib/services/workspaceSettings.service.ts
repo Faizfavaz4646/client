@@ -49,8 +49,8 @@ export const workspaceSettingsService = {
   },
 
   createInvite: async (workspaceId: string, expiresInDays: number = 7, maxUses: number = 0) => {
-    // expiresIn is in hours on the backend usually or days depending on implementation. Assuming days for UI.
-    const res = await api.post(`/workspaces/${workspaceId}/invites`, { expiresIn: expiresInDays * 24, maxUses });
+    // Backend expects a string like "7d" or "168h"
+    const res = await api.post(`/workspaces/${workspaceId}/invites`, { expiresIn: `${expiresInDays}d`, maxUses });
     return res.data;
   },
 

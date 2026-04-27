@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useAuthStore } from "@/store/authStore";
 import { socketService } from "@/lib/services/socket.service";
@@ -39,12 +40,21 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
   }, [messages]);
 
   const user = useAuthStore((state) => state.user);
+  const params = useParams();
+  const workspaceId = params?.workspaceId as string;
   const isPrivileged = user?.organizations?.some(org => 
     org.role?.toLowerCase() === 'admin' || 
     org.role?.toLowerCase() === 'owner' || 
     org.role?.toLowerCase() === 'founder'
+  ) || user?.workspaces?.some((w: any) => 
+    (w.workspaceId === workspaceId || w._id === workspaceId) && 
+    (w.role?.toLowerCase() === 'admin' || w.role?.toLowerCase() === 'owner')
   );
-  const isOrgFounder = !!isPrivileged;
+  const isOrgFounder = user?.organizations?.some(org => 
+    org.role?.toLowerCase() === 'admin' || 
+    org.role?.toLowerCase() === 'owner' || 
+    org.role?.toLowerCase() === 'founder'
+  );
 
   // 2. Tell React when the component has safely mounted in the browser
   useEffect(() => {
@@ -289,7 +299,6 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
               .sort((a,b) => new Date(a.pinnedAt || 0).getTime() - new Date(b.pinnedAt || 0).getTime());
               
             const regularMessages = validMessages
-              .filter(m => !m.isPinned)
               .sort((a, b) => new Date(a.createdAt || a.timestamp || 0).getTime() - new Date(b.createdAt || b.timestamp || 0).getTime());
 
             const renderMessageBubble = (msg: Message, i: number) => {
@@ -327,7 +336,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
             return (
               <div 
                 key={msg._id || msg.id || i} 
-                className={`flex w-full mb-4 px-2 group items-end relative ${isMe ? 'justify-end' : 'justify-start'} ${msg.isPinned ? 'mt-2 border border-amber-500/30 bg-amber-500/5 rounded-3xl p-2' : ''}`}
+                className={`flex w-full mb-4 px-2 group items-end relative ${isMe ? 'justify-end' : 'justify-start'}`}
                 onTouchStart={() => handleTouchStart((msg._id || msg.id) as string)}
                 onTouchMove={handleTouchEndOrMove}
                 onTouchEnd={handleTouchEndOrMove}
@@ -359,7 +368,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                     {/* Text Bubble */}
                     <div className={`relative flex flex-col shadow-md
                       ${isMe 
-                        ? 'bg-white text-slate-900 rounded-2xl rounded-br-sm' 
+                        ? 'bg-[#2a2a2a] border border-white/10 text-slate-200 rounded-2xl rounded-br-sm' 
                         : 'bg-[#1e1e1e]/90 backdrop-blur-md border border-white/5 text-slate-200 rounded-2xl rounded-bl-sm'
                       }
                       ${(msg.type === "IMAGE" || msg.type === "STICKER" || msg.type === "GIF") && !msg.content ? 'p-1.5' : 'px-3.5 py-2.5'}
@@ -377,7 +386,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
 
                             {/* Dropdown Options */}
                             {activeMenuId === (msg._id || msg.id) && (
-                              <div className="absolute right-full mr-3 top-0 w-48 bg-[#1e1e1e] border border-white/10 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-[100] overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200">
+                              <div className={`absolute ${isMe ? 'right-full mr-3 slide-in-from-right-2' : 'left-full ml-3 slide-in-from-left-2'} top-0 w-48 bg-[#1e1e1e] border border-white/10 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-[100] overflow-hidden animate-in fade-in duration-200`}>
                                 
                                 {/* Quick Reactions */}
                                 <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-black/20">
@@ -430,11 +439,11 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                             <button onClick={handleEditCancel} className="p-1.5 text-red-400 hover:bg-white/10 rounded-md"><X className="w-4 h-4" /></button>
                           </div>
                         ) : (
-                          <div className={`text-[15px] leading-relaxed whitespace-pre-wrap ${isMe ? 'text-slate-900 font-medium' : 'text-slate-300'}`}>
+                          <div className={`text-[15px] leading-relaxed whitespace-pre-wrap ${isMe ? 'text-slate-200 font-medium' : 'text-slate-300'}`}>
                             
                             {msg.replyTo && !msg.isDeleted && (
-                              <div className={`mb-1.5 px-2 py-1 rounded border-l-[3px] ${isMe ? 'bg-black/5 border-slate-400' : 'bg-black/20 border-indigo-500'} text-[11px] opacity-90 cursor-pointer overflow-hidden`}>
-                                <div className={`font-bold tracking-wide truncate ${isMe ? 'text-slate-600' : 'text-indigo-400'}`}>{(msg.replyTo.senderId as any)?.name || 'Replying to...'}</div>
+                              <div className={`mb-1.5 px-2 py-1 rounded border-l-[3px] ${isMe ? 'bg-black/20 border-slate-500' : 'bg-black/20 border-indigo-500'} text-[11px] opacity-90 cursor-pointer overflow-hidden`}>
+                                <div className={`font-bold tracking-wide truncate ${isMe ? 'text-slate-300' : 'text-indigo-400'}`}>{(msg.replyTo.senderId as any)?.name || 'Replying to...'}</div>
                                 <div className="truncate opacity-75 mt-0.5 max-w-[200px]">
                                   {msg.replyTo.type === 'IMAGE' ? '📷 Image' : msg.replyTo.type === 'GIF' ? '🎞️ GIF' : msg.replyTo.type === 'STICKER' ? '✨ Sticker' : msg.replyTo.type === 'FILE' ? '📎 File' : msg.replyTo.content || "Attachment"}
                                 </div>
@@ -525,16 +534,20 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
               <div className="flex flex-col relative w-full">
                 {/* STICKY PINNED MESSAGES HEADER */}
                 {pinnedMessages.length > 0 && (
-                  <div className="sticky top-0 z-[60] bg-[#0a0a0a]/95 backdrop-blur-xl border-b border-amber-500/20 pb-4 pt-1 shadow-2xl max-h-[35vh] overflow-y-auto custom-scrollbar rounded-b-2xl mb-4">
-                    <div className="flex items-center justify-between mb-2 sticky top-0 bg-[#0a0a0a]/95 z-[70] py-2 px-4 shadow-sm border-b border-white/5">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-amber-500/20 rounded-md"><Pin className="w-4 h-4 text-amber-500" /></div>
-                        <span className="text-xs font-bold text-amber-500 tracking-widest uppercase">Pinned</span>
+                  <div className="sticky top-0 z-[60] flex justify-center w-full mb-6 mt-1">
+                    <div className="bg-[#1e1e1e]/90 backdrop-blur-md border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl p-2.5 max-w-sm w-full flex items-center gap-3 cursor-pointer hover:bg-white/5 transition-colors">
+                      <div className="p-2 bg-white/10 rounded-full text-slate-300 shrink-0">
+                        <Pin className="w-4 h-4" />
                       </div>
-                      <span className="text-[10px] font-bold text-amber-500/50">{pinnedMessages.length} MSG</span>
-                    </div>
-                    <div>
-                      {pinnedMessages.map((msg, i) => renderMessageBubble(msg, i))}
+                      <div className="flex-1 overflow-hidden">
+                        <div className="text-xs font-semibold text-white flex items-center gap-2">
+                          Pinned Message
+                          {pinnedMessages.length > 1 && <span className="text-[10px] font-bold bg-white/10 text-slate-300 px-1.5 py-0.5 rounded-full">{pinnedMessages.length}</span>}
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                          {pinnedMessages[pinnedMessages.length - 1].content || (pinnedMessages[pinnedMessages.length - 1].type === "IMAGE" ? "📷 Image" : "Attachment")}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -13,8 +13,14 @@ export default function InvitesTab({ workspaceId }: { workspaceId: string }) {
   const fetchInvites = async () => {
     try {
       setIsLoading(true);
-      const res = await workspaceSettingsService.getInvites(workspaceId);
-      setInvites(res.data);
+      const res = await workspaceSettingsService.getInvites(workspaceId) as any;
+      if (res.data?.invites) {
+        setInvites(res.data.invites);
+      } else if (Array.isArray(res.data)) {
+        setInvites(res.data);
+      } else {
+        setInvites([]);
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to fetch active invites');
     } finally {
@@ -51,7 +57,7 @@ export default function InvitesTab({ workspaceId }: { workspaceId: string }) {
   };
 
   const copyToClipboard = (code: string) => {
-    const link = `${window.location.origin}/join/${code}`;
+    const link = `${window.location.origin}/workspace/join?code=${code}`;
     navigator.clipboard.writeText(link);
     setCopiedId(code);
     setTimeout(() => setCopiedId(null), 2000);
@@ -88,7 +94,7 @@ export default function InvitesTab({ workspaceId }: { workspaceId: string }) {
         ) : (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
             {invites.map(invite => (
-              <div key={invite._id} className="bg-[#1c2242] border border-indigo-500/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div key={invite.id || (invite as any)._id} className="bg-[#1c2242] border border-indigo-500/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
@@ -114,7 +120,7 @@ export default function InvitesTab({ workspaceId }: { workspaceId: string }) {
                     {copiedId === invite.code ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 group-active:scale-95" />}
                   </button>
                   <button
-                    onClick={() => handleRevoke(invite._id)}
+                    onClick={() => handleRevoke(invite.id || (invite as any)._id)}
                     className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-all border border-red-500/10 group"
                     title="Revoke Link"
                   >
