@@ -194,7 +194,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   // Simplify admin checks by scanning the user's organization array and their workspace roles.
   const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner') ||
     user?.workspaces?.some(w => w.workspaceId === activeWorkspaceId && (w.role === 'admin' || w.role === 'owner'));
-  const isOrgFounder = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
+  const isOrgFounder = !!user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
   const activeOrgId = (activeWorkspace as any)?.orgId || user?.organizations?.[0]?.orgId;
 
   // Loading State (Premium Spinner)
