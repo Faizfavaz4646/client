@@ -38,8 +38,9 @@ export function AddChannelMemberDropdown({
                     ]);
 
                     if (orgRes.success && wsRes.success) {
-                        const allOrgMembers = orgRes.data.members;
-                        const workspaceMemberIds = new Set(wsRes.data.members.map((m: any) => m.userId.toString() || m.userId._id?.toString()));
+                        const allOrgMembers = orgRes.data?.members || [];
+                        const workspaceMembers = wsRes.data?.workspace?.members || wsRes.data?.members || [];
+                        const workspaceMemberIds = new Set(workspaceMembers.map((m: any) => m.userId?.toString() || m.userId?._id?.toString() || m.id?.toString()));
                         
                         const wsMembersOnly = allOrgMembers.filter((m: any) => workspaceMemberIds.has(m.id?.toString()));
                         setMembers(wsMembersOnly);
