@@ -44,8 +44,23 @@ export const workspaceSettingsService = {
 
   // --- Invites ---
   getInvites: async (workspaceId: string) => {
-    const res = await api.get<{ data: IWorkspaceSettingsInvite[] }>(`/workspaces/${workspaceId}/invites`);
-    return res.data;
+    try {
+      const res = await api.get<{ data: IWorkspaceSettingsInvite[] }>(`/workspaces/${workspaceId}/invites`);
+      return res.data;
+    } catch (error: any) {
+      if (error.status === 500 || error.response?.status === 500) {
+        // Fallback for production backend bug: fetch org details then fetch org invites
+        const wsRes = await api.get(`/workspaces/${workspaceId}`);
+        const orgId = wsRes.data?.data?.workspace?.organizationId || wsRes.data?.data?.workspace?.orgId || wsRes.data?.organizationId || wsRes.data?.orgId;
+        if (!orgId) throw error;
+        
+        const orgInvitesRes = await api.get(`/invites/org/${orgId}`);
+        const allInvites = orgInvitesRes.data?.data?.invites || orgInvitesRes.data?.invites || [];
+        const wsInvites = allInvites.filter((i: any) => i.workspaceId === workspaceId && i.isActive !== false);
+        return { data: { invites: wsInvites } };
+      }
+      throw error;
+    }
   },
 
   createInvite: async (workspaceId: string, expiresInDays: number = 7, maxUses: number = 0) => {

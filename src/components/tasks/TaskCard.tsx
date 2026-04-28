@@ -64,6 +64,9 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
       style={style}
       {...attributes}
       {...listeners}
+      onClick={() => {
+        if (isPrivileged && onEdit) onEdit();
+      }}
       className={`relative group bg-[#0c0c0e] border overflow-hidden rounded-xl p-4 cursor-grab active:cursor-grabbing hover:border-indigo-400/30 transition-all ${
         task.status === TaskStatus.COMPLETED ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-indigo-500/20 shadow-sm'
       } ${
