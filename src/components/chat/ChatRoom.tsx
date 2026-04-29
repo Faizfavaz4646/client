@@ -56,6 +56,14 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
     org.role?.toLowerCase() === 'founder'
   );
 
+  // Robust ID extraction helper
+  const getID = (obj: any) => {
+    if (!obj) return null;
+    if (typeof obj === 'string') return obj.trim().toLowerCase();
+    const possibleId = obj?._id || obj?.id || obj?.userId || obj?.UserId || obj?.authorId || (obj as any)?.senderId?._id;
+    return possibleId ? String(possibleId).trim().toLowerCase() : null;
+  };
+
   // 2. Tell React when the component has safely mounted in the browser
   useEffect(() => {
     setIsMounted(true);
@@ -278,7 +286,16 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
 
       <div className="flex-1 p-6 overflow-y-auto custom-scrollbar relative z-10 space-y-4">
         {/* Desktop Menu Clickaway */}
-        {activeMenuId && <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)} />}
+        {/* Global Clickaway for Menus */}
+        {(activeMenuId || activeReactMenuId) && (
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => { 
+              setActiveMenuId(null); 
+              setActiveReactMenuId(null); 
+            }} 
+          />
+        )}
         
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-500 max-w-lg mx-auto pb-20">
@@ -302,12 +319,6 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
               .sort((a, b) => new Date(a.createdAt || a.timestamp || 0).getTime() - new Date(b.createdAt || b.timestamp || 0).getTime());
 
             const renderMessageBubble = (msg: Message, i: number) => {
-            const getID = (obj: any) => {
-              if (!obj) return null;
-              if (typeof obj === 'string') return obj.trim().toLowerCase();
-              const possibleId = obj?._id || obj?.id || obj?.userId || obj?.UserId || obj?.authorId || (obj as any)?.senderId?._id;
-              return possibleId ? String(possibleId).trim().toLowerCase() : null;
-            };
 
             const senderObj = msg.senderId || (msg as any).sender || {};
             const senderIdString = getID(msg.senderId) || getID((msg as any).sender);
@@ -378,7 +389,11 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                         {!editingMessageId && (msg._id || msg.id) && !msg._id?.startsWith('temp-') && !msg.isDeleted && (
                           <div className={`absolute top-1/2 -translate-y-1/2 ${isMe ? '-left-12' : '-right-12'} ${activeMenuId === (msg._id || msg.id) ? 'opacity-100 z-50' : 'opacity-40 md:opacity-0 md:group-hover:opacity-100 z-20'} transition-all flex items-center justify-center`}>
                             <button
-                              onClick={() => setActiveMenuId(activeMenuId === (msg._id || msg.id) ? null : (msg._id || msg.id) as string)}
+                              onClick={() => {
+                                const mId = (msg._id || msg.id) as string;
+                                setActiveMenuId(activeMenuId === mId ? null : mId);
+                                setActiveReactMenuId(null);
+                              }}
                               className="p-2 text-slate-300 hover:text-white bg-[#1a1a1a]/80 hover:bg-[#2a2a2a] border border-white/10 rounded-full shadow-xl transition-all hover:scale-110 active:scale-95"
                             >
                               <MoreVertical className="w-4 h-4" />
@@ -493,17 +508,46 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                            const possibleId = u?._id || u?.id;
                            return activeUserId && possibleId && String(possibleId).trim().toLowerCase() === activeUserId;
                          });
+                         
+                         // Tooltip text showing who reacted
+                         const reactorNames = r.users?.map((u: any) => {
+                           const reactorId = u?._id || u?.id;
+                           const myId = user?.id || (user as any)?._id || (user as any)?.userId;
+                           return (reactorId && myId && String(reactorId) === String(myId)) ? "You" : (u.name || "Someone");
+                         }).join(", ") || "Someone";
+
                          return (
-                           <button key={r._id || r.emoji} onClick={() => socketService.reactMessage(channelId, (msg._id || msg.id) as string, r.emoji)} className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold border ${hasReacted ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' : 'bg-black/40 border-white/10 text-slate-300 hover:bg-white/10'} backdrop-blur-md transition-all hover:scale-110 active:scale-95 shadow`}>
-                             <span>{r.emoji}</span>
-                             <span className="opacity-90">{r.users?.length || 1}</span>
-                           </button>
+                           <div key={r._id || r.emoji} className="relative group/reaction">
+                             <button 
+                               onClick={() => socketService.reactMessage(channelId, (msg._id || msg.id) as string, r.emoji)} 
+                               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[13px] font-bold border transition-all hover:scale-105 active:scale-95 shadow-sm
+                                 ${hasReacted 
+                                   ? 'bg-indigo-500/10 border-indigo-500/40 text-indigo-300 ring-1 ring-indigo-500/20' 
+                                   : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:border-white/20'
+                                 }`}
+                             >
+                               <span>{r.emoji}</span>
+                               <span className={hasReacted ? 'text-indigo-200' : 'text-slate-500'}>{r.users?.length || 1}</span>
+                             </button>
+
+                             {/* Tooltip on Hover */}
+                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#1a1a1a] border border-white/10 text-[10px] text-white rounded-md whitespace-nowrap opacity-0 group-hover/reaction:opacity-100 transition-opacity pointer-events-none z-[100] shadow-xl">
+                               {reactorNames}
+                             </div>
+                           </div>
                          );
                       })}
                       
                       {/* Quick React Desktop Hover Button */}
                       <div className="relative flex items-center gap-1.5">
-                        <button onClick={() => setActiveReactMenuId(activeReactMenuId === (msg._id || msg.id) ? null : (msg._id || msg.id) as string)} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-black/40 border border-white/10 text-slate-300 hover:bg-white/10 transition-all hover:scale-110 shadow group/btn">
+                        <button 
+                          onClick={() => {
+                            const mId = (msg._id || msg.id) as string;
+                            setActiveReactMenuId(activeReactMenuId === mId ? null : mId);
+                            setActiveMenuId(null);
+                          }} 
+                          className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-black/40 border border-white/10 text-slate-300 hover:bg-white/10 transition-all hover:scale-110 shadow group/btn"
+                        >
                            <Smile className="w-3.5 h-3.5" /> <Plus className="w-3 h-3 opacity-50 group-hover/btn:opacity-100 transition-opacity -ml-0.5" />
                         </button>
                         
@@ -646,7 +690,10 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
 
       <div className="p-4 bg-gradient-to-t from-black/80 to-transparent w-full shrink-0 relative z-20">
         {(() => {
-          const isMember = channel?.name === 'general' || isPrivileged || (channel?.members && channel.members.some((m: any) => m === user?.id || m._id === user?.id || m.userId === user?.id || (m.userId && m.userId._id === user?.id)));
+          const activeUserId = getID(user);
+          const isMember = channel?.name?.toLowerCase() === 'general' || 
+                          isPrivileged || 
+                          (channel?.members && channel.members.some((m: any) => getID(m) === activeUserId));
 
           if (!isMember && channel) {
             return (

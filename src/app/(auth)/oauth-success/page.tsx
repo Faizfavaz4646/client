@@ -17,6 +17,7 @@ function OAuthContent() {
     if (token) {
       // 1. Save token to store immediately
       setAccessToken(token);
+      document.cookie = `accessToken=${token}; path=/; max-age=86400; SameSite=Lax`;
 
       // 2. Fetch the user profile using the new token
       AuthService.getProfile()
@@ -25,12 +26,14 @@ function OAuthContent() {
           setUser(user);
 
           // 🚦 SMART ROUTING LOGIC
-          if (user.organizations && user.organizations.length > 0) {
-            // They belong to an org! Send them straight to their dashboard
-            router.push(`/workspace/${user.organizations[0].orgId}`);
+          const isFounder = user.organizations?.some((org: any) => org.orgId === user.id && org.role === 'admin');
+
+          if (user.workspaces && user.workspaces.length > 0) {
+            router.push(`/workspace/${user.workspaces[0].workspaceId}`);
+          } else if (isFounder) {
+            router.push('/workspace/setup');
           } else {
-            // Standalone user! Send them to the "Create Workspace" onboarding screen
-            router.push('/workspace');
+            router.push('/workspace/join');
           }
         })
         .catch((err) => {

@@ -34,6 +34,6 @@ export const AuthService = {
   // 6. Profile Management
   getProfile: async () => {
     const response = await api.get('/auth/me');
-    return response.data;
+    return response.data.data;
   }
 };

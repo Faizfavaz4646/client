@@ -479,6 +479,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               (c._id || c.id) === channelToAddMemberId ? updatedChannel : c
             ));
           }}
+          existingMemberIds={channels.find(c => (c._id || c.id) === channelToAddMemberId)?.members?.map((m: any) => m._id?.toString() || m.id?.toString() || m.toString()) || []}
         />
       )}
 
@@ -552,7 +553,13 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               </div>
             ) : channels.length > 0 ? (
               channels.map(channel => {
-                const isMember = channel.name === 'general' || isPrivileged || (channel.members && channel.members.some((m: any) => m === user?.id || m._id === user?.id || m.userId === user?.id || (m.userId && m.userId._id === user?.id)));
+                const isMember = channel.name.toLowerCase() === 'general' || isPrivileged || (channel.members && channel.members.some((m: any) => {
+                  const mId = typeof m === 'object' && m !== null 
+                    ? (m._id?.toString() || m.id?.toString() || m.userId?.toString() || (m.userId && m.userId._id?.toString())) 
+                    : m?.toString();
+                  const uId = user?.id?.toString() || (user as any)?._id?.toString() || (user as any)?.userId?.toString();
+                  return mId && uId && mId.toLowerCase() === uId.toLowerCase();
+                }));
 
                 const Icon = !isMember ? Lock :
                   channel.type === 'VOICE' ? Mic :
