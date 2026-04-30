@@ -2,6 +2,7 @@ import { io, Socket } from "socket.io-client";
 
 class SocketService {
   public socket: Socket | null = null;
+  private activeChannelId: string | null = null;
 
   // 1. Connect to the server
   connect() {
@@ -22,12 +23,26 @@ class SocketService {
       }
 
       this.socket = io(backendUrl, {
-        transports: ["websocket", "polling"],
+        transports: ["websocket"], // Force WebSocket to avoid polling/sticky-session issues in production
         auth: { token },
+        withCredentials: true,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
       });
 
       this.socket.on("connect", () => {
         console.log("✅ Socket connected with ID:", this.socket?.id);
+        
+        // CRITICAL: Re-join active channel on reconnection
+        if (this.activeChannelId) {
+          this.socket?.emit("join-channel", this.activeChannelId);
+          console.log(`🔄 Auto-rejoined channel: ${this.activeChannelId}`);
+        }
+      });
+
+      this.socket.on("connect_error", (err) => {
+        console.error("❌ Socket connection error:", err.message);
       });
     }
     return this.socket;
@@ -44,6 +59,7 @@ class SocketService {
 
   // 3. Join a specific channel
   joinChannel(channelId: string) {
+    this.activeChannelId = channelId;
     if (this.socket) {
       this.socket.emit("join-channel", channelId);
       console.log(`🚪 Joined channel: ${channelId}`);
