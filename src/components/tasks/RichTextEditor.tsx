@@ -1,21 +1,49 @@
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
 import { 
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, 
   Heading1, Heading2, Quote, Code, List, ListOrdered, 
-  ImageIcon, Undo, Redo 
+  ImageIcon, Undo, Redo, X, Loader2 
 } from 'lucide-react'
+import { useState } from 'react';
+import { MessageService } from '@/lib/services/message.service';
+import { toast } from 'sonner';
 
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
 }
 
+const ImageNode = ({ node, deleteNode }: any) => {
+  return (
+    <NodeViewWrapper className="relative inline-block group my-4 max-w-full">
+      <div className="relative inline-block">
+        <img src={node.attrs.src} alt={node.attrs.alt} className="rounded-lg max-h-[400px] object-contain border border-indigo-500/30" />
+        <button 
+          onClick={deleteNode}
+          className="absolute -top-3 -right-3 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-lg scale-90 group-hover:scale-100 border-2 border-[#1d2345] z-10"
+          title="Remove Image"
+        >
+          <X size={14} strokeWidth={3} />
+        </button>
+      </div>
+    </NodeViewWrapper>
+  );
+};
+
+const CustomImage = Image.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageNode);
+  },
+});
+
 export default function RichTextEditor({ value, onChange }: RichTextEditorProps) {
+  const [isUploading, setIsUploading] = useState(false);
+
   const editor = useEditor({
-    extensions: [StarterKit, Image, Underline],
+    extensions: [StarterKit, CustomImage, Underline],
     content: value,
     immediatelyRender: false,
     editorProps: {
@@ -37,8 +65,22 @@ export default function RichTextEditor({ value, onChange }: RichTextEditorProps)
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
-      const fakeUrl = URL.createObjectURL(file); 
-      editor.chain().focus().setImage({ src: fakeUrl }).run();
+      
+      try {
+        setIsUploading(true);
+        const res = await MessageService.uploadMedia(file);
+        const url = res.data?.url || res.data?.data?.url;
+        if (url) {
+            editor.chain().focus().setImage({ src: url }).run();
+        } else {
+            toast.error('Failed to get image URL from server.');
+        }
+      } catch (err) {
+        console.error("Upload error", err);
+        toast.error('Failed to upload image. Please try again.');
+      } finally {
+        setIsUploading(false);
+      }
     };
     input.click();
   };
@@ -162,8 +204,12 @@ export default function RichTextEditor({ value, onChange }: RichTextEditorProps)
         <div className="w-px h-4 bg-indigo-500/20 mx-1" />
 
         {/* Media */}
-        <ToolbarButton onClick={handleImageUpload}>
-          <ImageIcon size={15} strokeWidth={2.5} />
+        <ToolbarButton onClick={handleImageUpload} disabled={isUploading}>
+          {isUploading ? (
+            <Loader2 size={15} strokeWidth={2.5} className="animate-spin text-indigo-400" />
+          ) : (
+            <ImageIcon size={15} strokeWidth={2.5} />
+          )}
         </ToolbarButton>
       </div>
 

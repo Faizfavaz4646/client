@@ -184,6 +184,7 @@ export default function ChannelPage() {
             channelId={channelId as string}
             workspaceId={workspaceId as string}
             onMemberAdded={(updatedChannel) => setChannel(updatedChannel)}
+            existingMemberIds={channel?.members?.map((m: any) => m._id?.toString() || m.id?.toString() || m.toString()) || []}
           />
         )}
         {resolvedOrgId && (

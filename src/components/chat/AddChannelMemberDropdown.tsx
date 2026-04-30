@@ -5,6 +5,7 @@ import { ChannelService } from '@/lib/services/channel.service';
 import { WorkspaceService } from '@/lib/services/workspace.service';
 import { Plus, Check, Loader2, Search, X, UserPlus, Hash } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 export function AddChannelMemberDropdown({
     isOpen,
@@ -13,6 +14,7 @@ export function AddChannelMemberDropdown({
     channelId,
     workspaceId,
     onMemberAdded,
+    existingMemberIds = [],
 }: {
     isOpen: boolean;
     onClose: () => void;
@@ -20,6 +22,7 @@ export function AddChannelMemberDropdown({
     channelId: string;
     workspaceId: string;
     onMemberAdded: (channel: any) => void;
+    existingMemberIds?: string[];
 }) {
     const [members, setMembers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -38,8 +41,9 @@ export function AddChannelMemberDropdown({
                     ]);
 
                     if (orgRes.success && wsRes.success) {
-                        const allOrgMembers = orgRes.data.members;
-                        const workspaceMemberIds = new Set(wsRes.data.members.map((m: any) => m.userId.toString() || m.userId._id?.toString()));
+                        const allOrgMembers = orgRes.data?.members || [];
+                        const workspaceMembers = wsRes.data?.workspace?.members || wsRes.data?.members || [];
+                        const workspaceMemberIds = new Set(workspaceMembers.map((m: any) => m.userId?.toString() || m.userId?._id?.toString() || m.id?.toString()));
                         
                         const wsMembersOnly = allOrgMembers.filter((m: any) => workspaceMemberIds.has(m.id?.toString()));
                         setMembers(wsMembersOnly);
@@ -54,17 +58,30 @@ export function AddChannelMemberDropdown({
         }
     }, [isOpen, orgId, workspaceId]);
 
+    const [successId, setSuccessId] = useState<string | null>(null);
+
     const handleAddMember = async (userId: string) => {
         try {
             setAddingId(userId);
+            setSuccessId(null);
+            const memberName = members.find(m => (m.id?.toString() || m._id?.toString()) === userId)?.name || 'Member';
             const res = await ChannelService.addMemberToChannel(channelId, userId);
             if (res?.success) {
+                setSuccessId(userId);
+                toast.success(`Successfully added ${memberName} to channel`, {
+                    description: "They can now participate in conversations.",
+                    icon: <Check className="w-4 h-4 text-emerald-500" />
+                });
                 onMemberAdded(res.data.channel);
-                setTimeout(() => setAddingId(null), 1000); // Visual feedback pause
+                setTimeout(() => {
+                    setAddingId(null);
+                    setSuccessId(null);
+                }, 2000); 
             }
         } catch (error) {
             console.error("Failed to add member to channel:", error);
             setAddingId(null);
+            setSuccessId(null);
         }
     };
 
@@ -131,20 +148,31 @@ export function AddChannelMemberDropdown({
                                                 </div>
                                             </div>
 
-                                            <button
-                                                onClick={() => handleAddMember(member.id)}
-                                                disabled={addingId === member.id}
-                                                className={`p-1.5 rounded-lg border transition-all shrink-0 ml-2 ${addingId === member.id
-                                                    ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
-                                                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-indigo-500/20 hover:border-indigo-500/30 hover:text-indigo-400'
-                                                    }`}
-                                            >
-                                                {addingId === member.id ? (
-                                                    <Check className="w-4 h-4" />
-                                                ) : (
-                                                    <UserPlus className="w-4 h-4" />
+                                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                                                {successId === member.id && (
+                                                    <span className="text-[10px] font-bold text-emerald-400 animate-in fade-in slide-in-from-right-1">Added!</span>
                                                 )}
-                                            </button>
+                                                {existingMemberIds.includes(member.id?.toString()) ? (
+                                                    <div className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] font-medium text-slate-500">
+                                                        Member
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleAddMember(member.id)}
+                                                        disabled={addingId === member.id}
+                                                        className={`p-1.5 rounded-lg border transition-all shrink-0 ${addingId === member.id
+                                                            ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                                                            : 'bg-white/5 border-white/10 text-slate-400 hover:bg-indigo-500/20 hover:border-indigo-500/30 hover:text-indigo-400'
+                                                            }`}
+                                                    >
+                                                        {addingId === member.id ? (
+                                                            <Check className="w-4 h-4" />
+                                                        ) : (
+                                                            <UserPlus className="w-4 h-4" />
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

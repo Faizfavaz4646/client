@@ -13,7 +13,6 @@ export const InviteService = {
     return response.data;
   },
 
-  // 3. Get the current active invite for a workspace
   getWorkspaceInvite: async (workspaceId: string) => {
     const response = await api.get(`/invites/workspace/${workspaceId}`);
     return response.data;

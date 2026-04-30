@@ -172,167 +172,178 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="bg-[#11183a] border border-indigo-500/20 rounded-2xl p-6 w-full max-w-lg shadow-[0_0_50px_rgba(99,102,241,0.15)] relative max-h-[90vh] overflow-y-auto custom-scrollbar"
+            className="bg-[#11183a] border border-indigo-500/20 rounded-2xl p-6 md:p-8 w-full max-w-4xl shadow-[0_0_50px_rgba(99,102,241,0.15)] relative max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col"
           >
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-white transition-colors p-1"
+              className="absolute top-6 right-6 text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-colors p-1.5"
             >
               <X size={20} />
             </button>
 
-            <h2 className="text-xl font-semibold text-white mb-6">
+            <h2 className="text-2xl font-bold text-white mb-8 border-b border-white/5 pb-4">
               {task ? 'Edit Task' : 'Create New Task'}
             </h2>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-1.5">Title</label>
-                <input
-                  {...register('title')}
-                  autoFocus
-                  className="w-full bg-[#1c2242] border border-indigo-500/20 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-400/50 focus:border-transparent outline-none transition-all shadow-inner"
-                  placeholder="What needs to be done?"
-                />
-                {errors.title && <p className="text-red-400 text-xs mt-1">{errors.title.message}</p>}
-              </div>
-
-           <div>
-  <label className="block text-sm font-medium text-neutral-300 mb-1.5">Description</label>
-  <Controller
-    name="description"
-    control={control}
-    render={({ field }) => (
-      <RichTextEditor 
-        value={field.value || ''} 
-        onChange={field.onChange} 
-      />
-    )}
-  />
-</div>
-
-              <div className="grid grid-cols-2 gap-5">
-                {/* Custom Priority Dropdown */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-neutral-300 mb-1.5">Priority</label>
-                  <div 
-                    onClick={() => setIsPriorityDropdownOpen(!isPriorityDropdownOpen)}
-                    className="w-full bg-[#1c2242] shadow-inner border border-indigo-500/20 rounded-lg px-4 py-2.5 flex items-center justify-between cursor-pointer hover:border-indigo-500/40 transition-all select-none"
-                  >
-                    <div className={`flex items-center gap-2 text-sm font-bold uppercase ${priorityDetails[selectedPriority].color}`}>
-                        <Flag size={14} className="stroke-[3px]" />
-                        {selectedPriority}
-                    </div>
-                    <ChevronDown size={14} className="text-neutral-400" />
+            <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                
+                {/* LEFT COLUMN: Main Content */}
+                <div className="md:col-span-2 space-y-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-neutral-300 mb-2">Task Title</label>
+                    <input
+                      {...register('title')}
+                      autoFocus
+                      className="w-full bg-[#1c2242] border border-indigo-500/20 rounded-xl px-4 py-3 text-white text-lg focus:ring-2 focus:ring-indigo-400/50 focus:border-transparent outline-none transition-all shadow-inner"
+                      placeholder="What needs to be done?"
+                    />
+                    {errors.title && <p className="text-red-400 text-xs mt-1.5 font-medium">{errors.title.message}</p>}
                   </div>
-                  
-                  {isPriorityDropdownOpen && (
-                    <div className="absolute top-[72px] left-0 w-full bg-[#252b4d] shadow-2xl border border-indigo-500/20 rounded-lg z-50 overflow-hidden py-1">
-                        {Object.values(TaskPriority).map(p => (
-                            <div 
-                                key={p}
-                                onClick={() => { setValue('priority', p); setIsPriorityDropdownOpen(false); }}
-                                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold uppercase cursor-pointer hover:bg-white/5 transition-colors ${priorityDetails[p].color}`}
-                            >
-                                <Flag size={14} className="stroke-[3px]" />
-                                {p}
-                            </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-neutral-300 mb-1.5">Due Date</label>
-                  <Controller
-                    name="dueDate"
-                    control={control}
-                    render={({ field }) => (
-                      <DatePicker
-                        value={field.value ? new Date(field.value) : undefined}
-                        onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
-                        placeholder="Select due date"
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Assignees Section */}
-              <div className="relative">
-                 <label className="block text-sm font-medium text-neutral-300 mb-1.5 flex items-center justify-between">
-                    <span>Assignees</span>
-                    <span className="text-xs text-neutral-500">{selectedAssignees.length} selected</span>
-                 </label>
-                 <div 
-                    onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
-                    className="w-full bg-[#1c2242] border border-indigo-500/20 rounded-lg p-2 flex items-center min-h-[46px] cursor-pointer hover:border-indigo-500/40 transition-all flex-wrap gap-2 shadow-inner"
-                  >
-                    {selectedAssignees.length === 0 && (
-                        <div className="text-neutral-500 px-2 text-sm flex items-center gap-2">
-                           <UserPlus size={14} /> Assign to members...
+                  <div>
+                    <label className="block text-sm font-semibold text-neutral-300 mb-2">Description & Attachments</label>
+                    <Controller
+                      name="description"
+                      control={control}
+                      render={({ field }) => (
+                        <div className="min-h-[250px]">
+                          <RichTextEditor 
+                            value={field.value || ''} 
+                            onChange={field.onChange} 
+                          />
                         </div>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Settings */}
+                <div className="space-y-6 bg-[#0c0f24]/50 border border-indigo-500/10 p-5 rounded-2xl h-fit">
+                  
+                  {/* Priority */}
+                  <div className="relative">
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Priority</label>
+                    <div 
+                      onClick={() => setIsPriorityDropdownOpen(!isPriorityDropdownOpen)}
+                      className="w-full bg-[#1c2242] shadow-inner border border-indigo-500/20 rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer hover:border-indigo-500/40 transition-all select-none"
+                    >
+                      <div className={`flex items-center gap-2 text-sm font-bold uppercase ${priorityDetails[selectedPriority].color}`}>
+                          <Flag size={14} className="stroke-[3px]" />
+                          {selectedPriority}
+                      </div>
+                      <ChevronDown size={14} className="text-neutral-400" />
+                    </div>
+                    
+                    {isPriorityDropdownOpen && (
+                      <div className="absolute top-[75px] left-0 w-full bg-[#252b4d] shadow-2xl border border-indigo-500/20 rounded-xl z-50 overflow-hidden py-1">
+                          {Object.values(TaskPriority).map(p => (
+                              <div 
+                                  key={p}
+                                  onClick={() => { setValue('priority', p); setIsPriorityDropdownOpen(false); }}
+                                  className={`flex items-center gap-2 px-4 py-3 text-sm font-bold uppercase cursor-pointer hover:bg-white/5 transition-colors ${priorityDetails[p].color}`}
+                              >
+                                  <Flag size={14} className="stroke-[3px]" />
+                                  {p}
+                              </div>
+                          ))}
+                      </div>
                     )}
-                    {selectedAssignees.map(id => {
-                        const memberInfo = members.find(m => m.id === id);
-                        if (!memberInfo) return null;
-                        return (
-                            <div key={id} className="flex items-center gap-2 bg-[#252b4d] border border-indigo-500/20 pr-2 rounded-full overflow-hidden shrink-0 shadow-sm">
-                                {memberInfo.avatar ? (
-                                    <img src={memberInfo.avatar} className="w-5 h-5 object-cover" />
-                                ) : (
-                                    <div className="w-5 h-5 bg-indigo-500/20 text-[10px] text-indigo-400 font-bold flex items-center justify-center uppercase">
-                                        {memberInfo.name.charAt(0)}
-                                    </div>
-                                )}
-                                <span className="text-xs text-white pb-px">{memberInfo.name.split(' ')[0]}</span>
-                            </div>
-                        )
-                    })}
                   </div>
 
-                  {isAssigneeDropdownOpen && (
-                      <div className="absolute top-[80px] left-0 w-full bg-[#252b4d] border border-indigo-500/20 rounded-lg shadow-2xl z-50 overflow-hidden py-2 max-h-48 overflow-y-auto custom-scrollbar">
-                           {members.length === 0 && (
-                               <div className="px-4 py-3 text-sm text-neutral-500 text-center">No workspace members found</div>
-                           )}
-                           {members.map(member => (
-                               <div 
-                                  key={member.id} 
-                                  onClick={() => toggleAssignee(member.id)}
-                                  className="flex items-center justify-between px-4 py-2 hover:bg-white/5 cursor-pointer transition-colors"
-                                >
-                                  <div className="flex items-center gap-3">
-                                      {member.avatar ? (
-                                          <img src={member.avatar} className="w-6 h-6 rounded-full object-cover bg-black" />
-                                      ) : (
-                                          <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold flex items-center justify-center uppercase">
-                                              {member.name.charAt(0)}
-                                          </div>
-                                      )}
-                                      <span className="text-sm text-neutral-200 font-medium">{member.name}</span>
-                                  </div>
-                                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedAssignees.includes(member.id) ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-white/20'}`}>
-                                      {selectedAssignees.includes(member.id) && <Check size={10} strokeWidth={3} />}
-                                  </div>
-                               </div>
-                           ))}
+                  {/* Due Date */}
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Due Date</label>
+                    <Controller
+                      name="dueDate"
+                      control={control}
+                      render={({ field }) => (
+                        <DatePicker
+                          value={field.value ? new Date(field.value) : undefined}
+                          onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
+                          placeholder="Select a deadline"
+                        />
+                      )}
+                    />
+                  </div>
+
+                  {/* Assignees */}
+                  <div className="relative">
+                     <label className="flex items-center justify-between block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                        <span>Assignees</span>
+                        <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">{selectedAssignees.length} assigned</span>
+                     </label>
+                     <div 
+                        onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
+                        className="w-full bg-[#1c2242] border border-indigo-500/20 rounded-xl p-2.5 flex items-center min-h-[50px] cursor-pointer hover:border-indigo-500/40 transition-all flex-wrap gap-2 shadow-inner"
+                      >
+                        {selectedAssignees.length === 0 && (
+                            <div className="text-neutral-500 px-2 text-sm flex items-center gap-2 font-medium">
+                               <UserPlus size={16} /> Add members...
+                            </div>
+                        )}
+                        {selectedAssignees.map(id => {
+                            const memberInfo = members.find(m => m.id === id);
+                            if (!memberInfo) return null;
+                            return (
+                                <div key={id} className="flex items-center gap-2 bg-[#252b4d] border border-indigo-500/30 pr-2.5 rounded-full overflow-hidden shrink-0 shadow-md">
+                                    {memberInfo.avatar ? (
+                                        <img src={memberInfo.avatar} className="w-6 h-6 object-cover" />
+                                    ) : (
+                                        <div className="w-6 h-6 bg-indigo-500/20 text-xs text-indigo-400 font-bold flex items-center justify-center uppercase">
+                                            {memberInfo.name.charAt(0)}
+                                        </div>
+                                    )}
+                                    <span className="text-xs font-medium text-white pb-px">{memberInfo.name.split(' ')[0]}</span>
+                                </div>
+                            )
+                        })}
                       </div>
-                  )}
+
+                      {isAssigneeDropdownOpen && (
+                          <div className="absolute top-[85px] left-0 w-full bg-[#252b4d] border border-indigo-500/20 rounded-xl shadow-2xl z-50 overflow-hidden py-2 max-h-60 overflow-y-auto custom-scrollbar">
+                               {members.length === 0 && (
+                                   <div className="px-4 py-3 text-sm text-neutral-500 text-center font-medium">No members found</div>
+                               )}
+                               {members.map(member => (
+                                   <div 
+                                      key={member.id} 
+                                      onClick={() => toggleAssignee(member.id)}
+                                      className="flex items-center justify-between px-4 py-2.5 hover:bg-white/5 cursor-pointer transition-colors"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                          {member.avatar ? (
+                                              <img src={member.avatar} className="w-7 h-7 rounded-full object-cover bg-black" />
+                                          ) : (
+                                              <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-bold flex items-center justify-center uppercase">
+                                                  {member.name.charAt(0)}
+                                              </div>
+                                          )}
+                                          <span className="text-sm text-neutral-200 font-medium">{member.name}</span>
+                                      </div>
+                                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${selectedAssignees.includes(member.id) ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-white/20'}`}>
+                                          {selectedAssignees.includes(member.id) && <Check size={12} strokeWidth={3} />}
+                                      </div>
+                                   </div>
+                               ))}
+                          </div>
+                      )}
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-white/5">
+              <div className="flex justify-end gap-3 pt-8 mt-auto">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium text-neutral-300 hover:text-white transition-colors"
+                  className="px-6 py-3 text-sm font-bold text-neutral-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] active:scale-95"
                 >
                   {isSubmitting ? 'Saving...' : (task ? 'Save Changes' : 'Create Task')}
                 </button>
