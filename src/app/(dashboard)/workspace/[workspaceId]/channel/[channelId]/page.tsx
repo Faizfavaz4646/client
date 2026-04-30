@@ -99,10 +99,17 @@ export default function ChannelPage() {
         // 2. Fetch workspace/org details & members (Wrap in sub-try to prevent crash)
         try {
           const workspaceRes = await WorkspaceService.getWorkspaceById(workspaceId as string);
-          // Handle both { success, data } and raw data responses
-          const workspaceInfo = workspaceRes.data || workspaceRes.workspace || workspaceRes;
-          const orgId = workspaceInfo?.organizationId || workspaceInfo?.orgId || workspaceId;
-          setResolvedOrgId(orgId as string);
+          const workspaceInfo = workspaceRes.data?.workspace || workspaceRes.data || workspaceRes.workspace || workspaceRes;
+          
+          // Use a more robust check for Org ID
+          const orgId = workspaceInfo?.organizationId?._id || 
+                        workspaceInfo?.organizationId || 
+                        workspaceInfo?.orgId?._id || 
+                        workspaceInfo?.orgId || 
+                        channel?.organizationId || 
+                        workspaceId;
+                        
+          setResolvedOrgId(String(orgId));
 
           const membersRes = await OrganizationService.getOrganizationMembers(orgId as string);
           if (membersRes) {
@@ -205,7 +212,7 @@ export default function ChannelPage() {
            {activeTab === 'tasks' ? (
              <KanbanBoard channelId={channelId as string} isPrivileged={isPrivileged || false} />
            ) : (
-             <ChatRoom channelId={channelId as string} channel={channel} />
+             <ChatRoom channelId={channelId as string} channel={channel} workspaceMembers={workspaceMembers} />
            )}
         </div>
       </div>

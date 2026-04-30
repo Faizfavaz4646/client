@@ -38,10 +38,11 @@ export function useChannelCallTracker(
     setIsCheckingCall(true);
 
     socket.emit("webrtc:check-call", { roomId: channelId }, (res?: { isOngoing: boolean }) => {
-      setIsCallOngoing(prev => {
-        if (!prev && res?.isOngoing) setBannerState('visible');
-        return res?.isOngoing || false;
-      });
+      const ongoing = !!res?.isOngoing;
+      setIsCallOngoing(ongoing);
+      if (ongoing) {
+        setBannerState('visible');
+      }
       setIsCheckingCall(false);
     });
 

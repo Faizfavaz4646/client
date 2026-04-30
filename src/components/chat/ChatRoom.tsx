@@ -12,7 +12,7 @@ import type { Message } from "@/types/chat";
 import MediaPickerPopover from "./MediaPickerPopover";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function ChatRoom({ channelId, channel }: { channelId: string; channel?: any }) {
+export default function ChatRoom({ channelId, channel, workspaceMembers }: { channelId: string; channel?: any; workspaceMembers?: any[] }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -320,14 +320,15 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
 
             const renderMessageBubble = (msg: Message, i: number) => {
 
+            const getID = (obj: any) => obj?._id || obj?.id || (typeof obj === 'string' ? obj : null);
             const senderObj = msg.senderId || (msg as any).sender || {};
             const senderIdString = getID(msg.senderId) || getID((msg as any).sender);
             const activeUserId = getID(user);
             
             let senderName = senderObj.name || senderObj.username;
             if (!senderName) {
-              const workspaceName = user?.workspaces?.find(w => w.workspaceId === channel?.workspaceId)?.name;
-              senderName = workspaceName || user?.workspaces?.[0]?.name || "Unknown";
+              const knownMember = workspaceMembers?.find((m: any) => getID(m) === senderIdString);
+              senderName = knownMember?.name || knownMember?.username || "Unknown User";
             }
 
             // DUAL-IDENTITY FALLBACK: Match by ID OR by Exact Name Match
