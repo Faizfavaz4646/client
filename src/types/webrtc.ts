@@ -6,6 +6,8 @@ export interface IWebRTCParticipant {
   micEnabled: boolean;
   cameraEnabled: boolean;
   isScreenSharing: boolean;
+  name?: string;
+  avatar?: string;
 }
 
 export interface IWebRTCJoinPayload {
@@ -23,6 +25,8 @@ export interface IWebRTCSignalPayload {
   targetSocketId?: string; // Used when sending an offer/answer
   senderSocketId?: string; // Received when getting an offer/answer
   userId?: string;
+  name?: string;
+  avatar?: string;
   signal: RTCSessionDescriptionInit | RTCIceCandidateInit | any;
   roomId: string;
 }

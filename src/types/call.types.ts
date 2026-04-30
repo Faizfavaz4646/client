@@ -6,6 +6,7 @@ export interface VideoPlayerProps {
   workspaceMembers?: any[];
   currentUser?: any;
   isVideoOff?: boolean;
+  connectionState?: string;
 }
 
 export interface CallRoomProps {

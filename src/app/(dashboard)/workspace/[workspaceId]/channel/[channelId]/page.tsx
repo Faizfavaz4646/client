@@ -44,6 +44,7 @@ export default function ChannelPage() {
 
   // Call state tracking
   const [isCallActive, setIsCallActive] = React.useState(false); 
+  const [isCallExpanded, setIsCallExpanded] = React.useState(false); // Fullscreen mode
   
   // Persist call active state across refreshes
   React.useEffect(() => {
@@ -158,7 +159,9 @@ export default function ChannelPage() {
       />
 
       {/* 💬 Left Panel: Chat Room / Tasks */}
-      <div className={`flex flex-col h-full bg-transparent transition-all duration-500 ease-in-out ${isCallActive ? 'w-full md:w-7/12 lg:w-2/3 md:border-r border-white/10 hidden md:flex' : 'w-full'}`}>
+      <div className={`flex flex-col h-full bg-transparent transition-all duration-500 ease-in-out 
+        ${isCallExpanded ? 'w-0 opacity-0 pointer-events-none' : 
+          isCallActive ? 'w-full md:w-1/2 lg:w-2/3 md:border-r border-white/10 hidden md:flex' : 'w-full'}`}>
         
         {/* Unified Channel Header & Owner Call Controls */}
         <ChannelHeader 
@@ -212,18 +215,46 @@ export default function ChannelPage() {
         {isCallActive && channel && (
           <motion.div 
             initial={{ width: 0, opacity: 0, x: 50 }}
-            animate={{ width: "400px", opacity: 1, x: 0 }}
+            animate={{ 
+              width: isCallExpanded ? "100%" : "480px", 
+              opacity: 1, 
+              x: 0 
+            }}
             exit={{ width: 0, opacity: 0, x: 50 }}
-            className="h-full bg-[#050505] relative z-40 shrink-0 border-l border-white/5 overflow-hidden flex flex-col"
+            className={`h-full bg-[#050505] relative z-40 shrink-0 border-l border-white/5 overflow-hidden flex flex-col transition-all duration-500 ease-in-out`}
           >
             <div className="h-14 border-b border-white/5 bg-[#0a0a0a] flex items-center justify-between px-4 shrink-0 z-50">
-               <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
-                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                 Active Call
+               <div className="flex items-center gap-3">
+                 <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
+                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                   Active Call
+                 </div>
+                 {isCallExpanded && (
+                   <button 
+                     onClick={() => setIsCallExpanded(false)}
+                     className="px-2.5 py-1 text-[10px] bg-white/5 hover:bg-white/10 text-slate-300 rounded-full border border-white/10 transition-all"
+                   >
+                     Exit Fullscreen
+                   </button>
+                 )}
                </div>
-               <button onClick={() => setIsCallActive(false)} className="p-1.5 text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-all text-xs font-semibold flex items-center gap-1.5">
-                 <X className="w-3.5 h-3.5" /> Close Grid
-               </button>
+               
+               <div className="flex items-center gap-2">
+                 {!isCallExpanded && (
+                   <button 
+                     onClick={() => setIsCallExpanded(true)}
+                     className="p-1.5 text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-all text-xs font-semibold"
+                     title="Fullscreen mode"
+                   >
+                     <motion.svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m15 3 6 6M9 21l-6-6M21 3v6h-6M3 21v-6h6" />
+                     </motion.svg>
+                   </button>
+                 )}
+                 <button onClick={() => { setIsCallActive(false); setIsCallExpanded(false); }} className="p-1.5 text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-all text-xs font-semibold flex items-center gap-1.5">
+                   <X className="w-3.5 h-3.5" /> Close Grid
+                 </button>
+               </div>
             </div>
             <div className="flex-1 mt-14 relative h-[calc(100%-3.5rem)]">
                <CallRoom 
@@ -231,6 +262,7 @@ export default function ChannelPage() {
                  isAudioOnly={callTracker.isAudioOnlyMode} 
                  channel={channel} 
                  workspaceMembers={workspaceMembers}
+                 isExpanded={isCallExpanded}
                  onClose={() => setIsCallActive(false)} 
                />
             </div>

@@ -9,28 +9,11 @@ import {
   IWebRTCParticipant
 } from "@/types/webrtc"; 
 
-// Standard STUN servers (Local/Simple Networks) + TURN servers (Strict Production Networks)
-const ICE_SERVERS = {
+// Fallback STUN servers (used only if backend fetch fails)
+const FALLBACK_ICE_SERVERS = {
   iceServers: [
-    // STUN: Helps discover public IP
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
-    // TURN: Relays traffic if direct P2P fails (Corporate Firewalls, Mobile Networks)
-    {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443?transport=tcp",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    }
   ],
 };
 
@@ -45,17 +28,31 @@ class WebRTCService {
   public onCallForcedEnd: (() => void) | null = null;
   
   // Participant State Tracking
-  public participants: Map<string, Pick<IWebRTCParticipant, 'userId' | 'cameraEnabled'>> = new Map();
-  public onParticipantMetadataUpdate: ((participants: Map<string, Pick<IWebRTCParticipant, 'userId' | 'cameraEnabled'>>) => void) | null = null;
+  public participants: Map<string, Pick<IWebRTCParticipant, 'userId' | 'cameraEnabled' | 'name' | 'avatar'>> = new Map();
+  public onParticipantMetadataUpdate: ((participants: Map<string, Pick<IWebRTCParticipant, 'userId' | 'cameraEnabled' | 'name' | 'avatar'>>) => void) | null = null;
   public onParticipantJoined: ((socketId: string) => void) | null = null;
+  public onError: ((message: string) => void) | null = null;
+  public onConnectionStateChange: ((socketId: string, state: RTCPeerConnectionState) => void) | null = null;
   
   // ICE Candidate Queue map to prevent premature injections before remote SDP is set
   private iceQueues: Map<string, any[]> = new Map();
 
+  // Perfect Negotiation State
+  private makingOffer: Map<string, boolean> = new Map();
+  private ignoreOffer: Map<string, boolean> = new Map();
+  private dynamicIceServers: any = null;
+
   // 1. Initialize User Media (Camera/Mic)
   async startLocalMedia(video = true, audio = true, options?: { startVideoMuted?: boolean; startAudioMuted?: boolean }): Promise<MediaStream> {
     try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({ video, audio });
+      this.localStream = await navigator.mediaDevices.getUserMedia({ 
+        video, 
+        audio: audio ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        } : false 
+      });
 
       // Apply initial mute states immediately if requested
       if (options?.startVideoMuted) {
@@ -95,21 +92,41 @@ class WebRTCService {
     const micEnabled = this.localStream?.getAudioTracks()[0]?.enabled ?? false;
     const cameraEnabled = this.localStream?.getVideoTracks()[0]?.enabled ?? false;
 
-    const joinPayload: IWebRTCJoinPayload = { roomId, micEnabled, cameraEnabled };
-    socket.emit("webrtc:join", joinPayload);
+    // 0. Fetch Dynamic ICE Servers first
+    socket.emit("webrtc:get-ice-servers");
+    socket.once("webrtc:ice-servers", (data: { iceServers: any }) => {
+      this.dynamicIceServers = data.iceServers;
+      
+      const joinPayload: IWebRTCJoinPayload = { roomId, micEnabled, cameraEnabled };
+      socket.emit("webrtc:join", joinPayload);
+    });
+
+    // Listen for room errors (e.g. room full)
+    socket.off("webrtc:error");
+    socket.on("webrtc:error", (data: { message: string }) => {
+      console.error("❌ WebRTC Error:", data.message);
+      if (this.onError) this.onError(data.message);
+    });
 
     // Listen for existing people
     socket.off("webrtc:participants");
     socket.on("webrtc:participants", async (data: IWebRTCParticipantsPayload) => {
       console.log("👥 Existing participants:", data.participants);
       data.participants.forEach(p => {
-        this.participants.set(p.socketId, { userId: p.userId, cameraEnabled: p.cameraEnabled });
+        this.participants.set(p.socketId, { 
+          userId: p.userId, 
+          cameraEnabled: p.cameraEnabled,
+          name: p.name,
+          avatar: p.avatar
+        });
       });
       this.triggerParticipantUpdate();
 
       for (const participant of data.participants) {
         if (participant.socketId !== socket.id) {
-          await this.initiateCall(participant.socketId);
+          // Just creating the peer connection will trigger onnegotiationneeded
+          // which handles the offer creation automatically.
+          this.createPeerConnection(participant.socketId);
         }
       }
     });
@@ -117,7 +134,12 @@ class WebRTCService {
     socket.off("webrtc:user-joined");
     socket.on("webrtc:user-joined", (data: { roomId: string, participant: IWebRTCParticipant }) => {
       console.log("👋 New participant joined:", data.participant);
-      this.participants.set(data.participant.socketId, { userId: data.participant.userId, cameraEnabled: data.participant.cameraEnabled });
+      this.participants.set(data.participant.socketId, { 
+        userId: data.participant.userId, 
+        cameraEnabled: data.participant.cameraEnabled,
+        name: data.participant.name,
+        avatar: data.participant.avatar
+      });
       this.triggerParticipantUpdate();
       if (this.onParticipantJoined) {
         this.onParticipantJoined(data.participant.socketId);
@@ -143,7 +165,9 @@ class WebRTCService {
         const existing = this.participants.get(data.senderSocketId);
         this.participants.set(data.senderSocketId, { 
           userId: data.userId, 
-          cameraEnabled: existing?.cameraEnabled ?? true 
+          cameraEnabled: existing?.cameraEnabled ?? true,
+          name: data.name || existing?.name,
+          avatar: data.avatar || existing?.avatar
         });
         this.triggerParticipantUpdate();
       }
@@ -176,26 +200,19 @@ class WebRTCService {
       peer.close();
       this.peers.delete(socketId);
     }
+    this.makingOffer.delete(socketId);
+    this.ignoreOffer.delete(socketId);
+    this.iceQueues.delete(socketId);
+
     if (this.onRemoteStreamRemove) {
       this.onRemoteStreamRemove(socketId);
     }
   }
 
-  // 4. Create a Peer Connection and Send an Offer
+  // 4. Manual initiation removed in favor of onnegotiationneeded (Perfect Negotiation)
+  // This method is kept for type compatibility if needed but does nothing.
   private async initiateCall(targetSocketId: string): Promise<void> {
-    if (!this.currentRoomId) return;
-
-    const peer = this.createPeerConnection(targetSocketId);
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-
-    const signalPayload: IWebRTCSignalPayload = {
-      targetSocketId,
-      signal: offer,
-      roomId: this.currentRoomId
-    };
-
-    socketService.socket?.emit("webrtc:signal", signalPayload);
+    this.createPeerConnection(targetSocketId);
   }
 
   // 5. Handle Incoming Signals (Professional Switch Architecture & ICE Queue)
@@ -233,6 +250,15 @@ class WebRTCService {
 
       case "offer":
         try {
+          const offerCollision = this.makingOffer.get(senderSocketId) || peer.signalingState !== "stable";
+          const isPolite = socketService.socket?.id ? (socketService.socket.id < senderSocketId) : false;
+          
+          this.ignoreOffer.set(senderSocketId, !isPolite && offerCollision);
+          if (this.ignoreOffer.get(senderSocketId)) {
+            console.log("🛡️ Ignoring offer collision (Impolite)");
+            return;
+          }
+
           await peer.setRemoteDescription(new RTCSessionDescription(signal));
           
           // Process any queued ICE candidates now that remote is set
@@ -279,7 +305,8 @@ class WebRTCService {
 
   // 6. The WebRTC Engine Room
   private createPeerConnection(targetSocketId: string): RTCPeerConnection {
-    const peer = new RTCPeerConnection(ICE_SERVERS);
+    const iceConfig = this.dynamicIceServers ? { iceServers: this.dynamicIceServers } : FALLBACK_ICE_SERVERS;
+    const peer = new RTCPeerConnection(iceConfig);
     this.peers.set(targetSocketId, peer);
 
     if (this.localStream) {
@@ -287,6 +314,12 @@ class WebRTCService {
         peer.addTrack(track, this.localStream!);
       });
     }
+
+    peer.onconnectionstatechange = () => {
+      if (this.onConnectionStateChange) {
+        this.onConnectionStateChange(targetSocketId, peer.connectionState);
+      }
+    };
 
     peer.ontrack = (event) => {
       if (this.onRemoteStreamAdd) {
@@ -302,6 +335,23 @@ class WebRTCService {
           roomId: this.currentRoomId
         };
         socketService.socket?.emit("webrtc:signal", signalPayload);
+      }
+    };
+
+    // Perfect Negotiation NegotiationNeeded
+    peer.onnegotiationneeded = async () => {
+      try {
+        this.makingOffer.set(targetSocketId, true);
+        await peer.setLocalDescription();
+        socketService.socket?.emit("webrtc:signal", {
+          targetSocketId,
+          signal: peer.localDescription,
+          roomId: this.currentRoomId
+        });
+      } catch (err) {
+        console.error("Negotiation error:", err);
+      } finally {
+        this.makingOffer.set(targetSocketId, false);
       }
     };
 
