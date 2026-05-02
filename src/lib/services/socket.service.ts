@@ -23,7 +23,7 @@ class SocketService {
       }
 
       this.socket = io(backendUrl, {
-        transports: ["websocket"], // Force WebSocket to avoid polling/sticky-session issues in production
+        transports: ["polling", "websocket"], // Allow polling fallback for production load balancers
         auth: { token },
         withCredentials: true,
         reconnection: true,
