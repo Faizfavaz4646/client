@@ -9,7 +9,7 @@ class SocketService {
     if (!this.socket) {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
                          process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 
-                         "http://localhost:5000";
+                         (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname.replace('app', 'synq-backend-wakl')}:5000`.replace(':5000', '') : "http://localhost:5000");
       
       let token = null;
       if (typeof window !== "undefined") {
@@ -114,29 +114,49 @@ class SocketService {
 
   onMessageEdited(callback: (message: any) => void) {
     if (this.socket) {
-      this.socket.off("message-edited");
       this.socket.on("message-edited", callback);
+    }
+  }
+
+  offMessageEdited(callback: (message: any) => void) {
+    if (this.socket) {
+      this.socket.off("message-edited", callback);
     }
   }
 
   onMessageDeleted(callback: (data: { messageId: string }) => void) {
     if (this.socket) {
-      this.socket.off("message-deleted");
       this.socket.on("message-deleted", callback);
+    }
+  }
+
+  offMessageDeleted(callback: (data: { messageId: string }) => void) {
+    if (this.socket) {
+      this.socket.off("message-deleted", callback);
     }
   }
 
   onMessagePinned(callback: (message: any) => void) {
     if (this.socket) {
-      this.socket.off("message-pinned");
       this.socket.on("message-pinned", callback);
+    }
+  }
+
+  offMessagePinned(callback: (message: any) => void) {
+    if (this.socket) {
+      this.socket.off("message-pinned", callback);
     }
   }
 
   onMessageReaction(callback: (data: { messageId: string, reactions: any[] }) => void) {
     if (this.socket) {
-      this.socket.off("message-reaction");
       this.socket.on("message-reaction", callback);
+    }
+  }
+
+  offMessageReaction(callback: (data: { messageId: string, reactions: any[] }) => void) {
+    if (this.socket) {
+      this.socket.off("message-reaction", callback);
     }
   }
 
