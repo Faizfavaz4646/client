@@ -25,7 +25,6 @@ class SocketService {
       this.socket = io(backendUrl, {
         transports: ["polling", "websocket"], // Allow polling fallback for production load balancers
         auth: { token },
-        withCredentials: true,
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
