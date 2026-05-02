@@ -2,13 +2,14 @@ import { io, Socket } from "socket.io-client";
 
 class SocketService {
   public socket: Socket | null = null;
+  private activeChannelId: string | null = null;
 
   // 1. Connect to the server
   connect() {
     if (!this.socket) {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
                          process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 
-                         "http://localhost:5000";
+                         (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname.replace('app', 'synq-backend-wakl')}:5000`.replace(':5000', '') : "http://localhost:5000");
       
       let token = null;
       if (typeof window !== "undefined") {
@@ -22,12 +23,25 @@ class SocketService {
       }
 
       this.socket = io(backendUrl, {
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"], // Allow polling fallback for production load balancers
         auth: { token },
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
       });
 
       this.socket.on("connect", () => {
         console.log("✅ Socket connected with ID:", this.socket?.id);
+        
+        // CRITICAL: Re-join active channel on reconnection
+        if (this.activeChannelId) {
+          this.socket?.emit("join-channel", this.activeChannelId);
+          console.log(`🔄 Auto-rejoined channel: ${this.activeChannelId}`);
+        }
+      });
+
+      this.socket.on("connect_error", (err) => {
+        console.error("❌ Socket connection error:", err.message);
       });
     }
     return this.socket;
@@ -44,6 +58,7 @@ class SocketService {
 
   // 3. Join a specific channel
   joinChannel(channelId: string) {
+    this.activeChannelId = channelId;
     if (this.socket) {
       this.socket.emit("join-channel", channelId);
       console.log(`🚪 Joined channel: ${channelId}`);
@@ -98,29 +113,49 @@ class SocketService {
 
   onMessageEdited(callback: (message: any) => void) {
     if (this.socket) {
-      this.socket.off("message-edited");
       this.socket.on("message-edited", callback);
+    }
+  }
+
+  offMessageEdited(callback: (message: any) => void) {
+    if (this.socket) {
+      this.socket.off("message-edited", callback);
     }
   }
 
   onMessageDeleted(callback: (data: { messageId: string }) => void) {
     if (this.socket) {
-      this.socket.off("message-deleted");
       this.socket.on("message-deleted", callback);
+    }
+  }
+
+  offMessageDeleted(callback: (data: { messageId: string }) => void) {
+    if (this.socket) {
+      this.socket.off("message-deleted", callback);
     }
   }
 
   onMessagePinned(callback: (message: any) => void) {
     if (this.socket) {
-      this.socket.off("message-pinned");
       this.socket.on("message-pinned", callback);
+    }
+  }
+
+  offMessagePinned(callback: (message: any) => void) {
+    if (this.socket) {
+      this.socket.off("message-pinned", callback);
     }
   }
 
   onMessageReaction(callback: (data: { messageId: string, reactions: any[] }) => void) {
     if (this.socket) {
-      this.socket.off("message-reaction");
       this.socket.on("message-reaction", callback);
+    }
+  }
+
+  offMessageReaction(callback: (data: { messageId: string, reactions: any[] }) => void) {
+    if (this.socket) {
+      this.socket.off("message-reaction", callback);
     }
   }
 

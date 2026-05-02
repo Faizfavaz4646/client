@@ -12,7 +12,7 @@ import type { Message } from "@/types/chat";
 import MediaPickerPopover from "./MediaPickerPopover";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function ChatRoom({ channelId, channel }: { channelId: string; channel?: any }) {
+export default function ChatRoom({ channelId, channel, workspaceMembers }: { channelId: string; channel?: any; workspaceMembers?: any[] }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -28,6 +28,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
   const [activeReactMenuId, setActiveReactMenuId] = useState<string | null>(null);
   const [reactMediaPickerMessageId, setReactMediaPickerMessageId] = useState<string | null>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+  const [viewingReactionsMessageId, setViewingReactionsMessageId] = useState<string | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -60,9 +61,27 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
   const getID = (obj: any) => {
     if (!obj) return null;
     if (typeof obj === 'string') return obj.trim().toLowerCase();
-    const possibleId = obj?._id || obj?.id || obj?.userId || obj?.UserId || obj?.authorId || (obj as any)?.senderId?._id;
-    return possibleId ? String(possibleId).trim().toLowerCase() : null;
+    
+    // Check root fields, then nested user/userId fields
+    const id = obj._id || obj.id || 
+               obj.userId?._id || obj.userId?.id || 
+               obj.user?._id || obj.user?.id || 
+               obj.userId || obj.user || 
+               obj.authorId || obj.uid ||
+               obj.senderId?._id || (typeof obj.senderId === 'string' ? obj.senderId : null);
+               
+    if (!id || typeof id === 'object') return null; // Ensure we return a string ID
+    return String(id).trim().toLowerCase();
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).debugAuth = () => {
+        console.log("Current User Store:", user);
+        console.log("Calculated ID:", getID(user));
+      };
+    }
+  }, [user]);
 
   // 2. Tell React when the component has safely mounted in the browser
   useEffect(() => {
@@ -99,11 +118,31 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
     const newMessageCallback = (incomingData: Message) => {
       console.log("📨 New message arrived!", incomingData);
       setMessages((prev) => {
+        // 1. Check if this is a message we already have (by ID)
         if (incomingData._id && prev.some(m => m._id === incomingData._id)) return prev;
-        const isOptimisticDupe = prev.some(m => !m._id && m.content === incomingData.content);
-        if (isOptimisticDupe) {
-          return prev.map(m => (!m._id && m.content === incomingData.content) ? incomingData : m);
+
+        // 2. Check if this matches an optimistic message we just sent
+        // We look for a message that has no _id OR a temp id, and matches the content
+        const optimisticIdx = prev.findIndex(m => 
+          (!m._id || (typeof m._id === 'string' && m._id.startsWith('temp-'))) && 
+          m.content === incomingData.content
+        );
+        
+        if (optimisticIdx > -1) {
+          const newMessages = [...prev];
+          const optimisticMsg = newMessages[optimisticIdx];
+          
+          // CRITICAL FIX: Ensure sender identity is preserved
+          const serverSenderId = getID(incomingData.senderId);
+          const mergedMessage: Message = {
+            ...incomingData,
+            senderId: (serverSenderId ? incomingData.senderId : (optimisticMsg.senderId || user)) as any
+          };
+          
+          newMessages[optimisticIdx] = mergedMessage;
+          return newMessages;
         }
+
         return [...prev, incomingData];
       });
     };
@@ -111,30 +150,38 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
     // Listen for new messages
     socketService.onNewMessage(newMessageCallback);
 
-    // Listen for real-time edits (if backend decides to broadcast them later)
-    socketService.onMessageEdited((updatedMsg: Message) => {
+    // Listen for real-time edits
+    const editCallback = (updatedMsg: Message) => {
       setMessages(prev => prev.map(m => (m._id || m.id) === (updatedMsg._id || updatedMsg.id) ? updatedMsg : m));
-    });
+    };
+    socketService.onMessageEdited(editCallback);
 
     // Listen for real-time deletes
-    socketService.onMessageDeleted((data: { messageId: string }) => {
+    const deleteCallback = (data: { messageId: string }) => {
       setMessages(prev => prev.map(m => (m._id || m.id) === data.messageId ? { ...m, isDeleted: true, content: "", attachments: [] } : m));
-    });
+    };
+    socketService.onMessageDeleted(deleteCallback);
 
     // Listen for real-time Pins
-    socketService.onMessagePinned((populatedMsg: Message) => {
+    const pinCallback = (populatedMsg: Message) => {
       setMessages(prev => prev.map(m => (m._id || m.id) === (populatedMsg._id || populatedMsg.id) ? populatedMsg : m));
-    });
+    };
+    socketService.onMessagePinned(pinCallback);
 
     // Listen for real-time Reactions
-    socketService.onMessageReaction((data: { messageId: string, reactions: any[] }) => {
+    const reactionCallback = (data: { messageId: string, reactions: any[] }) => {
       setMessages(prev => prev.map(m => (m._id || m.id) === data.messageId ? { ...m, reactions: data.reactions } : m));
-    });
+    };
+    socketService.onMessageReaction(reactionCallback);
 
     return () => {
       socketService.offNewMessage(newMessageCallback);
+      socketService.offMessageEdited(editCallback);
+      socketService.offMessageDeleted(deleteCallback);
+      socketService.offMessagePinned(pinCallback);
+      socketService.offMessageReaction(reactionCallback);
     };
-  }, [channelId, isMounted]); // Add isMounted to dependency array
+  }, [channelId, isMounted]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,9 +218,15 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
           const attachment = res.data.data.attachment;
           const realType = attachment.fileType?.includes("image") ? "IMAGE" : "FILE";
 
-          setMessages(prev => prev.map(m => m._id === tempId ? { ...m, _id: undefined, attachments: [attachment] } : m));
+          const cleanAttachment = {
+            url: attachment.url,
+            name: attachment.name,
+            fileType: attachment.fileType
+          };
+
+          setMessages(prev => prev.map(m => m._id === tempId ? { ...m, _id: undefined, attachments: [cleanAttachment] } : m));
           // Provide an empty string fallback since sending a pure image has no text content
-          socketService.sendMessage(channelId, messageText || "", realType, [attachment], cachedReplyTo);
+          socketService.sendMessage(channelId, messageText || "", realType, [cleanAttachment], cachedReplyTo);
         }
       } catch (err) {
         console.error("Upload failed", err);
@@ -188,7 +241,14 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
     // Only text
     if (messageText.trim()) {
       const activeUserId = user?.id || (user as any)?._id || (user as any)?.userId;
-      const optimisticText: Message = { content: messageText, type: "TEXT", senderId: { _id: activeUserId, id: activeUserId, name: user?.name, avatar: user?.avatar }, createdAt: new Date().toISOString() };
+      const tempId = "temp-" + Date.now();
+      const optimisticText: Message = { 
+        _id: tempId,
+        content: messageText, 
+        type: "TEXT", 
+        senderId: { _id: activeUserId, id: activeUserId, name: user?.name, avatar: user?.avatar }, 
+        createdAt: new Date().toISOString() 
+      };
       setMessages((prev) => [...prev, optimisticText]);
       socketService.sendMessage(channelId, messageText, "TEXT", [], cachedReplyTo);
     }
@@ -315,27 +375,96 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
               .filter(m => m.isPinned)
               .sort((a,b) => new Date(a.pinnedAt || 0).getTime() - new Date(b.pinnedAt || 0).getTime());
               
-            const regularMessages = validMessages
-              .sort((a, b) => new Date(a.createdAt || a.timestamp || 0).getTime() - new Date(b.createdAt || b.timestamp || 0).getTime());
+            const regularMessages = [...validMessages].sort((a, b) => {
+              const dateA = new Date(a.createdAt || a.timestamp || 0).getTime();
+              const dateB = new Date(b.createdAt || b.timestamp || 0).getTime();
+              if (dateA === dateB) return 0;
+              return dateA - dateB;
+            });
 
             const renderMessageBubble = (msg: Message, i: number) => {
-
             const senderObj = msg.senderId || (msg as any).sender || {};
-            const senderIdString = getID(msg.senderId) || getID((msg as any).sender);
-            const activeUserId = getID(user);
             
-            let senderName = senderObj.name || senderObj.username;
-            if (!senderName) {
-              const workspaceName = user?.workspaces?.find(w => w.workspaceId === channel?.workspaceId)?.name;
-              senderName = workspaceName || user?.workspaces?.[0]?.name || "Unknown";
+            // 1. Resolve "Me" identity from multiple sources
+            const storeUser = user || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('synq-auth-storage') || '{}')?.state?.user : null);
+            
+            const myStoreId = getID(storeUser);
+            const myStoreAltId = storeUser?.id || (storeUser as any)?._id || (storeUser as any)?.userId;
+            
+            // Find myself in the workspace members to get the server-recognized ID for this workspace
+            const myNameInStore = (storeUser?.name || storeUser?.username || "").toLowerCase().trim();
+            const myMemberEntry = workspaceMembers?.find(m => {
+              const mUser = m.userId || m.user || m;
+              const mName = (mUser.name || mUser.username || mUser.displayName || "").toLowerCase().trim();
+              const mId = getID(m);
+              const mAltId = m.id || m._id || (mUser._id || mUser.id);
+              
+              return (mName && myNameInStore && mName === myNameInStore) || 
+                     (mId && (mId === myStoreId || mId === myStoreAltId)) ||
+                     (mAltId && (mAltId === myStoreId || mAltId === myStoreAltId));
+            });
+            const myWorkspaceId = getID(myMemberEntry);
+
+            // 2. Extract Sender IDs
+            const senderIdVal = getID(msg.senderId) || getID((msg as any).sender) || getID((msg as any).author) || getID((msg as any).user);
+            const senderAltIdVal = msg.senderId?._id || msg.senderId?.id || (msg as any).sender?._id || (msg as any).sender?.id || (msg as any).authorId || (msg as any).userId;
+
+            // 3. Check isMe by ID (Most reliable)
+            const myPossibleIds = [myStoreId, myStoreAltId, myWorkspaceId].filter(Boolean).map(id => String(id).toLowerCase().trim());
+            const senderPossibleIds = [senderIdVal, senderAltIdVal].filter(Boolean).map(id => String(id).toLowerCase().trim());
+            
+            const isMeById = myPossibleIds.some(myId => senderPossibleIds.includes(myId));
+            const activeUserId = myStoreId; // Restore for compatibility with reaction logic below
+            
+            // 4. Resolve Name with fallbacks
+            let senderName = senderObj.name || senderObj.username || senderObj.displayName || (msg as any).senderName || (msg as any).authorName;
+            
+            // FRONTEND WORKAROUND FOR BACKEND POPULATE BUG
+            // If sender is missing, it's the Organization Owner (Mongoose populate bug).
+            let forceIsMe = false;
+            if (!senderIdVal) {
+                const isOrgOwner = storeUser?.organizations?.some((o: any) => o.role === 'admin' && o.orgId === storeUser.id);
+                if (isOrgOwner) {
+                    senderName = storeUser?.name || "You";
+                    forceIsMe = true;
+                } else {
+                    const currentWorkspace = storeUser?.workspaces?.find((w: any) => w.workspaceId === workspaceId || w._id === workspaceId);
+                    senderName = currentWorkspace?.name || "Workspace Admin";
+                }
+            }
+            
+            // If it's me, label it "You"
+            if (isMeById || forceIsMe) {
+              senderName = "You";
+            }
+            
+            // If still unknown, look in workspace members
+            if (!senderName || senderName === "Unknown User") {
+              const knownMember = workspaceMembers?.find((m: any) => {
+                const mUser = m.userId || m.user || m;
+                const mId = getID(m);
+                const mAltId = m.id || m._id || (mUser._id || mUser.id);
+                
+                return (mId && senderPossibleIds.includes(String(mId).toLowerCase().trim())) || 
+                       (mAltId && senderPossibleIds.includes(String(mAltId).toLowerCase().trim()));
+              });
+              const matchedUser = knownMember?.userId || knownMember?.user || knownMember;
+              senderName = matchedUser?.name || matchedUser?.username || "Unknown User";
             }
 
-            // DUAL-IDENTITY FALLBACK: Match by ID OR by Exact Name Match
-            const isMeById = !!senderIdString && !!activeUserId && senderIdString === activeUserId;
-            const isMeByName = !!senderName && !!user?.name && senderName === user.name;
+            // 5. Final Identity Check (Triple-Lock + Name fallback)
+            const storeName = myNameInStore;
+            const storeUsername = (storeUser?.username || "").toLowerCase().trim();
+            const currentSenderName = (senderName || "").toLowerCase().trim();
             
-            if (isMeById || isMeByName) senderName = "You";
-            const isMe = isMeById || isMeByName || senderName === "You";
+            const isMeByName = !!currentSenderName && (
+              (!!storeName && currentSenderName === storeName) || 
+              (!!storeUsername && currentSenderName === storeUsername) ||
+              (currentSenderName === "you") ||
+              (currentSenderName === "me")
+            );
+            
+            const isMe = isMeById || isMeByName || senderName === "You" || forceIsMe;
 
             const initial = senderName.charAt(0).toUpperCase();
             const avatarUrl = senderObj.avatar || (isMe ? user?.avatar : null);
@@ -347,7 +476,8 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
             return (
               <div 
                 key={msg._id || msg.id || i} 
-                className={`flex w-full mb-4 px-2 group items-end relative ${isMe ? 'justify-end' : 'justify-start'}`}
+                id={`message-${msg._id || msg.id}`}
+                className={`flex w-full mb-4 px-2 group items-end relative ${isMe ? 'justify-end' : 'justify-start'} transition-colors duration-500`}
                 onTouchStart={() => handleTouchStart((msg._id || msg.id) as string)}
                 onTouchMove={handleTouchEndOrMove}
                 onTouchEnd={handleTouchEndOrMove}
@@ -377,7 +507,15 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                     )}
                     
                     {/* Text Bubble */}
-                    <div className={`relative flex flex-col shadow-md
+                    <div 
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        if (editingMessageId || msg._id?.startsWith('temp-') || msg.isDeleted) return;
+                        const mId = (msg._id || msg.id) as string;
+                        setActiveMenuId(activeMenuId === mId ? null : mId);
+                        setActiveReactMenuId(null);
+                      }}
+                      className={`relative flex flex-col shadow-md cursor-context-menu
                       ${isMe 
                         ? 'bg-[#2a2a2a] border border-white/10 text-slate-200 rounded-2xl rounded-br-sm' 
                         : 'bg-[#1e1e1e]/90 backdrop-blur-md border border-white/5 text-slate-200 rounded-2xl rounded-bl-sm'
@@ -385,22 +523,8 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                       ${(msg.type === "IMAGE" || msg.type === "STICKER" || msg.type === "GIF") && !msg.content ? 'p-1.5' : 'px-3.5 py-2.5'}
                     `}>
 
-                        {/* Three Dots More Menu (Visible across all devices) */}
-                        {!editingMessageId && (msg._id || msg.id) && !msg._id?.startsWith('temp-') && !msg.isDeleted && (
-                          <div className={`absolute top-1/2 -translate-y-1/2 ${isMe ? '-left-12' : '-right-12'} ${activeMenuId === (msg._id || msg.id) ? 'opacity-100 z-50' : 'opacity-40 md:opacity-0 md:group-hover:opacity-100 z-20'} transition-all flex items-center justify-center`}>
-                            <button
-                              onClick={() => {
-                                const mId = (msg._id || msg.id) as string;
-                                setActiveMenuId(activeMenuId === mId ? null : mId);
-                                setActiveReactMenuId(null);
-                              }}
-                              className="p-2 text-slate-300 hover:text-white bg-[#1a1a1a]/80 hover:bg-[#2a2a2a] border border-white/10 rounded-full shadow-xl transition-all hover:scale-110 active:scale-95"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-
-                            {/* Dropdown Options */}
-                            {activeMenuId === (msg._id || msg.id) && (
+                        {/* Dropdown Options (Context Menu) */}
+                        {!editingMessageId && (msg._id || msg.id) && !msg._id?.startsWith('temp-') && !msg.isDeleted && activeMenuId === (msg._id || msg.id) && (
                               <div className={`absolute ${isMe ? 'right-full mr-3 slide-in-from-right-2' : 'left-full ml-3 slide-in-from-left-2'} top-0 w-48 bg-[#1e1e1e] border border-white/10 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-[100] overflow-hidden animate-in fade-in duration-200`}>
                                 
                                 {/* Quick Reactions */}
@@ -437,8 +561,6 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                                   )}
                                 </div>
                               </div>
-                            )}
-                          </div>
                         )}
 
                         {editingMessageId === (msg._id || msg.id) ? (
@@ -457,7 +579,20 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                           <div className={`text-[15px] leading-relaxed whitespace-pre-wrap ${isMe ? 'text-slate-200 font-medium' : 'text-slate-300'}`}>
                             
                             {msg.replyTo && !msg.isDeleted && (
-                              <div className={`mb-1.5 px-2 py-1 rounded border-l-[3px] ${isMe ? 'bg-black/20 border-slate-500' : 'bg-black/20 border-indigo-500'} text-[11px] opacity-90 cursor-pointer overflow-hidden`}>
+                              <div 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const targetId = (msg.replyTo as any)._id || (msg.replyTo as any).id;
+                                  if (!targetId) return;
+                                  const el = document.getElementById(`message-${targetId}`);
+                                  if (el) {
+                                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    el.classList.add('bg-white/10', 'rounded-xl');
+                                    setTimeout(() => el.classList.remove('bg-white/10', 'rounded-xl'), 1500);
+                                  }
+                                }}
+                                className={`mb-1.5 px-2 py-1 rounded border-l-[3px] ${isMe ? 'bg-black/20 border-slate-500 hover:bg-black/30' : 'bg-black/20 border-indigo-500 hover:bg-black/30'} text-[11px] opacity-90 cursor-pointer overflow-hidden transition-colors`}
+                              >
                                 <div className={`font-bold tracking-wide truncate ${isMe ? 'text-slate-300' : 'text-indigo-400'}`}>{(msg.replyTo.senderId as any)?.name || 'Replying to...'}</div>
                                 <div className="truncate opacity-75 mt-0.5 max-w-[200px]">
                                   {msg.replyTo.type === 'IMAGE' ? '📷 Image' : msg.replyTo.type === 'GIF' ? '🎞️ GIF' : msg.replyTo.type === 'STICKER' ? '✨ Sticker' : msg.replyTo.type === 'FILE' ? '📎 File' : msg.replyTo.content || "Attachment"}
@@ -502,7 +637,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                     </div>
                     
                     {/* Reactions array & Quick React Button */}
-                    <div className={`flex flex-wrap gap-1 mt-1 z-10 ${isMe ? 'justify-end' : 'justify-start'} ${(msg.reactions && msg.reactions.length > 0) || activeReactMenuId === (msg._id || msg.id) ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100 transition-opacity'}`}>
+                    <div className={`flex flex-wrap gap-1 mt-1.5 z-10 ${isMe ? 'justify-end' : 'justify-start'} transition-opacity`}>
                       {msg.reactions?.map(r => {
                          const hasReacted = r.users?.some(u => {
                            const possibleId = u?._id || u?.id;
@@ -519,7 +654,7 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                          return (
                            <div key={r._id || r.emoji} className="relative group/reaction">
                              <button 
-                               onClick={() => socketService.reactMessage(channelId, (msg._id || msg.id) as string, r.emoji)} 
+                               onClick={() => setViewingReactionsMessageId((msg._id || msg.id) as string)} 
                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[13px] font-bold border transition-all hover:scale-105 active:scale-95 shadow-sm
                                  ${hasReacted 
                                    ? 'bg-indigo-500/10 border-indigo-500/40 text-indigo-300 ring-1 ring-indigo-500/20' 
@@ -538,8 +673,8 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                          );
                       })}
                       
-                      {/* Quick React Desktop Hover Button */}
-                      <div className="relative flex items-center gap-1.5">
+                      {/* Quick React Desktop Hover Button - Always partially visible now so users know it's there */}
+                      <div className={`flex relative items-center gap-1.5 ${(msg.reactions && msg.reactions.length > 0) || activeReactMenuId === (msg._id || msg.id) ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'} transition-opacity`}>
                         <button 
                           onClick={() => {
                             const mId = (msg._id || msg.id) as string;
@@ -551,8 +686,8 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                            <Smile className="w-3.5 h-3.5" /> <Plus className="w-3 h-3 opacity-50 group-hover/btn:opacity-100 transition-opacity -ml-0.5" />
                         </button>
                         
-                        <button onClick={() => setReplyingToMessage(msg)} className="flex items-center justify-center w-6 h-6 rounded-full bg-black/40 border border-white/10 text-slate-300 hover:bg-white/10 transition-all hover:scale-110 shadow">
-                           <Reply className="w-3.5 h-3.5" />
+                        <button onClick={() => setReplyingToMessage(msg)} className="flex items-center justify-center w-7 h-7 rounded-full bg-black/40 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white transition-all hover:scale-110 shadow">
+                           <Reply className="w-4 h-4" />
                         </button>
                         
                         {activeReactMenuId === (msg._id || msg.id) && (
@@ -608,6 +743,91 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
       </div>
 
       {/* Mobile Long Press Action Modal */}
+      {/* Reactions Details Modal */}
+      <AnimatePresence>
+        {viewingReactionsMessageId && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+            <motion.div 
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               onClick={() => setViewingReactionsMessageId(null)}
+               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            {(() => {
+              const m = messages.find(msg => (msg._id || msg.id) === viewingReactionsMessageId);
+              if (!m) return null;
+              
+              const totalReactions = m.reactions?.reduce((acc, r) => acc + (r.users?.length || 0), 0) || 0;
+              const activeUserId = user?.id || (user as any)?._id || (user as any)?.userId;
+
+              return (
+                <motion.div 
+                   initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                   animate={{ scale: 1, opacity: 1, y: 0 }}
+                   exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                   className="w-[300px] bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-[24px] p-4 shadow-[0_0_40px_rgba(0,0,0,0.5)] relative z-10 flex flex-col max-h-[60vh]"
+                >
+                  <div className="flex justify-between items-center mb-3 px-1">
+                    <h3 className="text-[15px] font-semibold text-white tracking-wide">Reactions</h3>
+                    <span className="text-[10px] font-bold text-slate-300 bg-white/10 px-2 py-0.5 rounded-full">{totalReactions} total</span>
+                  </div>
+
+                  {/* Add/Change Reaction Row */}
+                  <div className="flex justify-between items-center px-3 py-2.5 mb-3 bg-black/40 rounded-xl border border-white/5">
+                    {['👍', '❤️', '😂', '😮', '😢'].map(emoji => {
+                      const hasReacted = m.reactions?.some(r => r.emoji === emoji && r.users?.some(u => {
+                        const uId = u?._id || u?.id;
+                        return uId && activeUserId && String(uId) === String(activeUserId);
+                      }));
+                      return (
+                        <button 
+                          key={emoji} 
+                          onClick={() => { socketService.reactMessage(channelId, (m._id || m.id) as string, emoji); setViewingReactionsMessageId(null); }} 
+                          className={`text-xl hover:scale-125 transition-transform active:scale-90 ${hasReacted ? 'bg-white/10 ring-1 ring-white/20 rounded-full scale-110' : ''}`}
+                        >
+                          {emoji}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* List of Users who reacted */}
+                  <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                    {m.reactions?.map(r => (
+                      <div key={r.emoji}>
+                        {r.users?.map((u: any, i) => {
+                          const uId = u?._id || u?.id;
+                          const isMyReaction = uId && activeUserId && String(uId) === String(activeUserId);
+                          return (
+                            <div key={`${r.emoji}-${i}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group/reactitem">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-[10px] shadow-inner">
+                                  {u.avatar ? <img src={u.avatar} alt={u.name} className="w-full h-full rounded-full object-cover" /> : (u.name?.[0]?.toUpperCase() || 'U')}
+                                </div>
+                                <span className="text-[13px] font-medium text-slate-200">{isMyReaction ? 'You' : u.name || 'Unknown User'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm bg-white/5 w-7 h-7 flex items-center justify-center rounded-full shadow-sm border border-white/5">{r.emoji}</span>
+                                {isMyReaction && (
+                                  <button onClick={() => socketService.reactMessage(channelId, (m._id || m.id) as string, r.emoji)} className="text-[9px] uppercase font-bold text-rose-400 opacity-0 group-hover/reactitem:opacity-100 bg-rose-400/10 hover:bg-rose-400/20 px-2 py-1 rounded-md transition-all ml-1">Remove</button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <button onClick={() => setViewingReactionsMessageId(null)} className="w-full mt-3 bg-white/5 hover:bg-white/10 text-white text-sm py-2 rounded-lg font-medium transition-colors shadow-sm border border-white/5">Close</button>
+                </motion.div>
+              );
+            })()}
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {mobileActionMessageId && (
           <div className="fixed inset-0 z-[200] md:hidden flex items-end">
@@ -631,22 +851,58 @@ export default function ChatRoom({ channelId, channel }: { channelId: string; ch
                 const m = messages.find(msg => (msg._id || msg.id) === mobileActionMessageId);
                 if (!m) return null;
                 
-                const getID = (obj: any) => {
-                  if (!obj) return null;
-                  if (typeof obj === 'string') return obj.trim().toLowerCase();
-                  return String(obj?._id || obj?.id || obj?.userId || obj?.UserId || obj?.authorId || (obj as any)?.senderId?._id).trim().toLowerCase() || null;
-                };
-                const activeUserId = getID(user);
-                const senderIdString = getID(m.senderId) || getID((m as any).sender);
-                const isMeById = !!senderIdString && !!activeUserId && senderIdString === activeUserId;
-                const isMeByName = !!user?.name && !!m.senderId?.name && m.senderId.name === user.name;
-                const mIsMe = isMeById || isMeByName;
+                // 1. Resolve "Me" identity using deep resolution
+                const storeUser = user || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('synq-auth-storage') || '{}')?.state?.user : null);
+                const myStoreId = getID(storeUser);
+                const myStoreAltId = storeUser?.id || (storeUser as any)?._id || (storeUser as any)?.userId;
+                
+                const myNameInStore = (storeUser?.name || storeUser?.username || "").toLowerCase().trim();
+                const myMemberEntry = workspaceMembers?.find(mem => {
+                  const mUser = mem.userId || mem.user || mem;
+                  const mName = (mUser.name || mUser.username || mUser.displayName || "").toLowerCase().trim();
+                  const mId = getID(mem);
+                  const mAltId = mem.id || mem._id || (mUser._id || mUser.id);
+                  return (mName && myNameInStore && mName === myNameInStore) || 
+                         (mId && (mId === myStoreId || mId === myStoreAltId)) ||
+                         (mAltId && (mAltId === myStoreId || mAltId === myStoreAltId));
+                });
+                const myWorkspaceId = getID(myMemberEntry);
+
+                const myPossibleIds = [myStoreId, myStoreAltId, myWorkspaceId].filter(Boolean).map(id => String(id).toLowerCase().trim());
+
+                // 2. Sender IDs
+                const senderIdVal = getID(m.senderId) || getID((m as any).sender) || getID((m as any).author) || getID((m as any).user);
+                const senderAltIdVal = m.senderId?._id || m.senderId?.id || (m as any).sender?._id || (m as any).sender?.id || (m as any).authorId || (m as any).userId;
+                const senderPossibleIds = [senderIdVal, senderAltIdVal].filter(Boolean).map(id => String(id).toLowerCase().trim());
+
+                // 3. Identity Match
+                const isMeById = myPossibleIds.some(myId => senderPossibleIds.includes(myId));
+                
+                // Name resolution for mobile
+                const senderUser = m.senderId || (m as any).sender || {};
+                let mSenderName = senderUser.name || senderUser.username || senderUser.displayName || (m as any).senderName || (m as any).authorName || "Someone";
+                
+                const isOrgOwner = storeUser?.organizations?.some((o: any) => o.role === 'admin' && o.orgId === storeUser.id);
+                let forceIsMe = false;
+                if (!senderIdVal) {
+                    if (isOrgOwner) {
+                        mSenderName = "You";
+                        forceIsMe = true;
+                    } else {
+                        const currentWorkspace = storeUser?.workspaces?.find((w: any) => w.workspaceId === workspaceId || w._id === workspaceId);
+                        mSenderName = currentWorkspace?.name || "Workspace Admin";
+                    }
+                }
+
+                const isMeByName = !!storeUser?.name && mSenderName.toLowerCase() === storeUser.name.toLowerCase();
+                const mIsMe = isMeById || isMeByName || mSenderName === "You" || forceIsMe;
 
                 return (
-                   <div className="flex flex-col gap-2">
-                      <div className="flex justify-between px-2 mb-2 bg-black/20 rounded-2xl p-4 border border-white/5">
+                   <div className="flex flex-col gap-2 relative">
+                      {/* WhatsApp Style Mobile Reaction Capsule */}
+                      <div className="flex justify-between items-center px-6 py-4 mb-2 bg-[#2a2a2a] rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.4)] border border-white/10 mx-2 -mt-12 relative z-50 animate-in slide-in-from-bottom-4">
                         {['👍', '❤️', '😂', '😮', '😢'].map(emoji => (
-                          <button key={emoji} onClick={() => { socketService.reactMessage(channelId, (m._id || m.id) as string, emoji); setMobileActionMessageId(null); }} className="text-3xl hover:scale-125 transition-transform">{emoji}</button>
+                          <button key={emoji} onClick={() => { socketService.reactMessage(channelId, (m._id || m.id) as string, emoji); setMobileActionMessageId(null); }} className="text-3xl hover:scale-125 transition-transform active:scale-90 active:opacity-75">{emoji}</button>
                         ))}
                       </div>
 

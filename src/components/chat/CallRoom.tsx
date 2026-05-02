@@ -7,9 +7,10 @@ import VideoPlayer from "./VideoPlayer";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, AlertCircle, MonitorUp, MonitorOff } from "lucide-react";
 import { CallRoomProps } from "@/types/call.types";
 import { useAuthStore } from "@/store/authStore";
+import { toast } from "sonner";
 
 
-export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMembers, onClose }: CallRoomProps) {
+export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMembers, isExpanded, onClose }: CallRoomProps & { isExpanded?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const params = useParams();
   const workspaceId = params?.workspaceId as string;
@@ -35,6 +36,7 @@ export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMem
   const [error, setError] = useState<string | null>(null);
   
   const [participants, setParticipants] = useState<any>(new Map());
+  const [connectionStates, setConnectionStates] = useState<Map<string, RTCPeerConnectionState>>(new Map());
 
   useEffect(() => {
     // Sync local state if isAudioOnly prop changes (e.g. late sync)
@@ -107,11 +109,35 @@ export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMem
       }
     };
 
-    // 7. Cleanup when unmounting (leaving the page)
+    // 7. Listen for Connection State Changes
+    webrtcService.onConnectionStateChange = (socketId, state) => {
+      if (mounted) {
+        setConnectionStates((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(socketId, state);
+          return newMap;
+        });
+      }
+    };
+
+    // 8. Listen for Errors
+    webrtcService.onError = (message) => {
+      toast.error("Call Error", {
+        description: message,
+        icon: <AlertCircle className="w-4 h-4 text-red-500" />
+      });
+      if (message.includes("full")) {
+        onClose?.();
+      }
+    };
+
+    // 9. Cleanup when unmounting (leaving the page)
     return () => {
       mounted = false;
       webrtcService.onCallForcedEnd = null;
       webrtcService.onParticipantMetadataUpdate = null;
+      webrtcService.onConnectionStateChange = null;
+      webrtcService.onError = null;
       webrtcService.leaveCall();
       setLocalStream(null);
       setRemoteStreams(new Map());
@@ -196,7 +222,10 @@ export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMem
     <div className="flex flex-col h-full w-full bg-[#0a0a0a] p-4 relative overflow-hidden">
       
       {/* 📹 The Video Grid */}
-      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max max-h-[calc(100%-80px)] overflow-y-auto custom-scrollbar content-center px-4">
+      <div className={`flex-1 grid gap-4 auto-rows-max max-h-[calc(100%-80px)] overflow-y-auto custom-scrollbar content-center px-4 
+        ${isExpanded 
+          ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' 
+          : 'grid-cols-1'}`}>
         {/* Local User */}
         {localStream && (
           <VideoPlayer stream={localStream} isLocal={true} currentUser={user} isVideoOff={!isVideoOn} />
@@ -214,6 +243,7 @@ export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMem
                channel={channel} 
                workspaceMembers={workspaceMembers}
                isVideoOff={pInfo ? !pInfo.cameraEnabled : false} 
+               connectionState={connectionStates.get(socketId)}
              />
            );
         })}

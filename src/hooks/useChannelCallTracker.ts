@@ -38,14 +38,15 @@ export function useChannelCallTracker(
     setIsCheckingCall(true);
 
     socket.emit("webrtc:check-call", { roomId: channelId }, (res?: { isOngoing: boolean }) => {
-      setIsCallOngoing(prev => {
-        if (!prev && res?.isOngoing) setBannerState('visible');
-        return res?.isOngoing || false;
-      });
+      const ongoing = !!res?.isOngoing;
+      setIsCallOngoing(ongoing);
+      if (ongoing) {
+        setBannerState('visible');
+      }
       setIsCheckingCall(false);
     });
 
-    socket.on("webrtc:call-status-response", (data: { roomId: string; isOngoing: boolean }) => {
+    const handleCallStatusResponse = (data: { roomId: string; isOngoing: boolean }) => {
       if (data.roomId === channelId) {
         setIsCallOngoing(prev => {
           if (!prev && data.isOngoing) setBannerState('visible');
@@ -53,9 +54,9 @@ export function useChannelCallTracker(
         });
         setIsCheckingCall(false);
       }
-    });
+    };
 
-    socket.on("webrtc:call-status-changed", (data: { roomId: string; isOngoing: boolean }) => {
+    const handleCallStatusChanged = (data: { roomId: string; isOngoing: boolean }) => {
       if (data.roomId === channelId) {
         setIsCallOngoing(prev => {
           if (!prev && data.isOngoing) setBannerState('visible');
@@ -68,9 +69,9 @@ export function useChannelCallTracker(
           setIsAudioOnlyMode(false);
         }
       }
-    });
+    };
 
-    socket.on("new-message", (msg: { channelId: string, content: string }) => {
+    const handleNewMessage = (msg: { channelId: string, content: string }) => {
       if (msg.channelId === channelId) {
         if (msg.content === "@@SYSTEM_CALL_TYPE:AUDIO") {
           setIsAudioOnlyMode(true);
@@ -78,7 +79,11 @@ export function useChannelCallTracker(
           setIsAudioOnlyMode(false);
         }
       }
-    });
+    };
+
+    socket.on("webrtc:call-status-response", handleCallStatusResponse);
+    socket.on("webrtc:call-status-changed", handleCallStatusChanged);
+    socket.on("new-message", handleNewMessage);
 
     webrtcService.onParticipantJoined = () => {
       if (isPrivileged && isCallActive) {
@@ -88,9 +93,9 @@ export function useChannelCallTracker(
     };
 
     return () => {
-      socket.off("webrtc:call-status-response");
-      socket.off("webrtc:call-status-changed");
-      socket.off("new-message");
+      socket.off("webrtc:call-status-response", handleCallStatusResponse);
+      socket.off("webrtc:call-status-changed", handleCallStatusChanged);
+      socket.off("new-message", handleNewMessage);
       webrtcService.onParticipantJoined = null;
     };
   }, [channelId, channelType, isPrivileged, isCallActive, isAudioOnlyMode, setIsCallActive]);
