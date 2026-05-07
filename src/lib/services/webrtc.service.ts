@@ -21,6 +21,7 @@ class WebRTCService {
   public localStream: MediaStream | null = null;
   public peers: Map<string, RTCPeerConnection> = new Map();
   public currentRoomId: string | null = null;
+  private reconnectListenerAdded: boolean = false;
   
   // Callbacks so our React UI can update when videos arrive or leave
   public onRemoteStreamAdd: ((socketId: string, stream: MediaStream) => void) | null = null;
@@ -89,6 +90,30 @@ class WebRTCService {
 
     this.currentRoomId = roomId;
 
+    if (!this.reconnectListenerAdded) {
+      socket.on("connect", () => {
+        if (this.currentRoomId) {
+          console.log(`🔄 WebRTC Reconnecting to room: ${this.currentRoomId}`);
+          // Clean up old peers since socket ID changed
+          this.peers.forEach(peer => peer.close());
+          this.peers.clear();
+          this.participants.clear();
+          this.makingOffer.clear();
+          this.ignoreOffer.clear();
+          this.iceQueues.clear();
+          
+          socket.emit("webrtc:get-ice-servers");
+          socket.once("webrtc:ice-servers", (data: { iceServers: any }) => {
+            this.dynamicIceServers = data.iceServers;
+            const micEnabled = this.localStream?.getAudioTracks()[0]?.enabled ?? false;
+            const cameraEnabled = this.localStream?.getVideoTracks()[0]?.enabled ?? false;
+            socket.emit("webrtc:join", { roomId: this.currentRoomId, micEnabled, cameraEnabled });
+          });
+        }
+      });
+      this.reconnectListenerAdded = true;
+    }
+
     const micEnabled = this.localStream?.getAudioTracks()[0]?.enabled ?? false;
     const cameraEnabled = this.localStream?.getVideoTracks()[0]?.enabled ?? false;
 
@@ -141,6 +166,12 @@ class WebRTCService {
         avatar: data.participant.avatar
       });
       this.triggerParticipantUpdate();
+      
+      // Explicitly trigger the WebRTC offer process when a user joins
+      if (data.participant.socketId !== socket.id) {
+        this.createPeerConnection(data.participant.socketId);
+      }
+
       if (this.onParticipantJoined) {
         this.onParticipantJoined(data.participant.socketId);
       }

@@ -23,10 +23,12 @@ class SocketService {
       }
 
       this.socket = io(backendUrl, {
-        transports: ["polling", "websocket"], // Allow polling fallback for production load balancers
+        transports: ["websocket"], // MANDATORY: Match backend enforcement
+        withCredentials: true,
+        autoConnect: true,
         auth: { token },
         reconnection: true,
-        reconnectionAttempts: Infinity,
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
       });
 
