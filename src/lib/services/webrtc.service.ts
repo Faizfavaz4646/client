@@ -252,6 +252,12 @@ class WebRTCService {
 
     let peer = this.peers.get(senderSocketId);
 
+    if (peer && (peer.connectionState === 'failed' || peer.connectionState === 'disconnected' || peer.connectionState === 'closed')) {
+      console.log(`♻️ Recreating stuck peer connection for ${senderSocketId}`);
+      this.removePeer(senderSocketId);
+      peer = undefined;
+    }
+
     if (!peer) {
       peer = this.createPeerConnection(senderSocketId);
     }
@@ -393,7 +399,11 @@ class WebRTCService {
   toggleMedia(type: 'video' | 'audio', isEnabled: boolean): void {
     if (!this.localStream || !this.currentRoomId) return;
     
-    const payload: IWebRTCMediaTogglePayload = { roomId: this.currentRoomId };
+    const payload: IWebRTCMediaTogglePayload = { 
+      roomId: this.currentRoomId,
+      cameraEnabled: this.localStream.getVideoTracks()[0]?.enabled ?? false,
+      micEnabled: this.localStream.getAudioTracks()[0]?.enabled ?? false
+    };
 
     if (type === 'video') {
       const track = this.localStream.getVideoTracks()[0];
