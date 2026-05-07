@@ -399,7 +399,11 @@ class WebRTCService {
   toggleMedia(type: 'video' | 'audio', isEnabled: boolean): void {
     if (!this.localStream || !this.currentRoomId) return;
     
-    const payload: IWebRTCMediaTogglePayload = { roomId: this.currentRoomId };
+    const payload: IWebRTCMediaTogglePayload = { 
+      roomId: this.currentRoomId,
+      cameraEnabled: this.localStream.getVideoTracks()[0]?.enabled ?? false,
+      micEnabled: this.localStream.getAudioTracks()[0]?.enabled ?? false
+    };
 
     if (type === 'video') {
       const track = this.localStream.getVideoTracks()[0];

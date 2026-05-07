@@ -56,7 +56,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date" }: Dat
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -5, scale: 0.95 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute top-full mt-2 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-0 z-[200] max-w-[calc(100vw-2rem)] sm:max-w-max overflow-x-auto bg-[#252b4d] border border-indigo-500/20 shadow-2xl rounded-xl p-3"
+            className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-0 z-[200] max-w-[calc(100vw-2rem)] sm:max-w-max overflow-x-auto bg-[#252b4d] border border-indigo-500/20 shadow-2xl rounded-xl p-3"
           >
             <style>{`
               .rdp {

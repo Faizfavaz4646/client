@@ -44,6 +44,7 @@ export default function ChannelPage() {
 
   // Call state tracking
   const [isCallActive, setIsCallActive] = React.useState(false); 
+  const [isCallVisible, setIsCallVisible] = React.useState(false);
   const [isCallExpanded, setIsCallExpanded] = React.useState(false); // Fullscreen mode
   
   // Persist call active state across refreshes
@@ -56,9 +57,11 @@ export default function ChannelPage() {
     if (isCallActive) {
       sessionStorage.setItem(`call_active_${channelId}`, 'true');
       setIsCallExpanded(true); // Default to fullscreen when call starts
+      setIsCallVisible(true);
     } else {
       sessionStorage.removeItem(`call_active_${channelId}`);
       setIsCallExpanded(false);
+      setIsCallVisible(false);
     }
   }, [isCallActive, channelId]);
 
@@ -159,12 +162,14 @@ export default function ChannelPage() {
       <CallNotificationBanner 
         isCallOngoing={callTracker.isCallOngoing}
         isCallActive={isCallActive}
+        isCallVisible={isCallVisible}
         bannerState={callTracker.bannerState}
         isAudioOnlyMode={callTracker.isAudioOnlyMode}
         channel={channel}
         setBannerState={callTracker.setBannerState}
         setIsAudioOnlyMode={callTracker.setIsAudioOnlyMode}
         setIsCallActive={setIsCallActive}
+        setIsCallVisible={setIsCallVisible}
       />
 
       {/* 💬 Left Panel: Chat Room / Tasks */}
@@ -225,12 +230,12 @@ export default function ChannelPage() {
           <motion.div 
             initial={{ width: 0, opacity: 0, x: 50 }}
             animate={{ 
-              width: isCallExpanded ? "100%" : "480px", 
-              opacity: 1, 
-              x: 0 
+              width: !isCallVisible ? 0 : (isCallExpanded ? "100%" : "480px"), 
+              opacity: !isCallVisible ? 0 : 1, 
+              x: !isCallVisible ? 50 : 0 
             }}
             exit={{ width: 0, opacity: 0, x: 50 }}
-            className={`h-full bg-[#050505] relative z-40 shrink-0 border-l border-white/5 overflow-hidden flex flex-col transition-all duration-500 ease-in-out`}
+            className={`h-full bg-[#050505] relative z-40 shrink-0 border-l border-white/5 overflow-hidden flex flex-col transition-all duration-500 ease-in-out ${!isCallVisible ? 'pointer-events-none' : ''}`}
           >
             <div className="h-14 border-b border-white/5 bg-[#0a0a0a] flex items-center justify-between px-4 shrink-0 z-50">
                <div className="flex items-center gap-3">
@@ -260,8 +265,8 @@ export default function ChannelPage() {
                      </motion.svg>
                    </button>
                  )}
-                 <button onClick={() => { setIsCallActive(false); setIsCallExpanded(false); }} className="p-1.5 text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-all text-xs font-semibold flex items-center gap-1.5">
-                   <X className="w-3.5 h-3.5" /> Close Grid
+                 <button onClick={() => { setIsCallVisible(false); }} className="p-1.5 text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-all text-xs font-semibold flex items-center gap-1.5">
+                   <X className="w-3.5 h-3.5" /> Hide Grid
                  </button>
                </div>
             </div>
@@ -272,6 +277,7 @@ export default function ChannelPage() {
                  channel={channel} 
                  workspaceMembers={workspaceMembers}
                  isExpanded={isCallExpanded}
+                 isHidden={!isCallVisible}
                  onClose={() => setIsCallActive(false)} 
                />
             </div>

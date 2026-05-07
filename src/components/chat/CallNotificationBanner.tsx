@@ -11,6 +11,8 @@ interface CallNotificationBannerProps {
   setBannerState: (state: 'visible' | 'hidden' | 'rejected') => void;
   setIsAudioOnlyMode: (val: boolean) => void;
   setIsCallActive: (val: boolean) => void;
+  isCallVisible?: boolean;
+  setIsCallVisible?: (val: boolean) => void;
 }
 
 export function CallNotificationBanner({
@@ -21,12 +23,17 @@ export function CallNotificationBanner({
   channel,
   setBannerState,
   setIsAudioOnlyMode,
-  setIsCallActive
+  setIsCallActive,
+  isCallVisible = true,
+  setIsCallVisible
 }: CallNotificationBannerProps) {
+  const showIncoming = isCallOngoing && !isCallActive && bannerState === 'visible';
+  const showHiddenOngoing = isCallOngoing && !isCallActive && bannerState === 'hidden';
+  const showReturnToCall = isCallActive && !isCallVisible;
   return (
     <>
       <AnimatePresence>
-        {isCallOngoing && !isCallActive && bannerState === 'visible' && (
+        {(showIncoming || showReturnToCall) && (
           <motion.div 
             initial={{ y: -100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -41,7 +48,7 @@ export function CallNotificationBanner({
               </div>
               <div className="flex flex-col mr-2">
                 <span className="text-sm font-bold leading-tight">
-                  Incoming {isAudioOnlyMode ? "Audio" : "Video"} Call...
+                  {showReturnToCall ? "Call in Background" : `Incoming ${isAudioOnlyMode ? "Audio" : "Video"} Call...`}
                 </span>
                 <span className="text-[11px] text-slate-400 leading-tight">from #{channel?.name}</span>
               </div>
@@ -50,10 +57,15 @@ export function CallNotificationBanner({
             <div className="flex items-center gap-2 border-l border-white/10 pl-4">
               <button 
                 onClick={() => {
-                  setIsAudioOnlyMode(isAudioOnlyMode); 
-                  setIsCallActive(true);
+                  if (showReturnToCall && setIsCallVisible) {
+                    setIsCallVisible(true);
+                  } else {
+                    setIsAudioOnlyMode(isAudioOnlyMode); 
+                    setIsCallActive(true);
+                    if (setIsCallVisible) setIsCallVisible(true);
+                  }
                 }}
-                title="Join Call"
+                title={showReturnToCall ? "Return to Call" : "Join Call"}
                 className="w-10 h-10 flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-white rounded-full shadow-lg shadow-emerald-500/30 transition-all active:scale-95 group"
               >
                 <Phone className="w-4 h-4 shadow-sm group-hover:scale-110 transition-transform" />
@@ -80,7 +92,7 @@ export function CallNotificationBanner({
       </AnimatePresence>
 
       <AnimatePresence>
-        {isCallOngoing && !isCallActive && bannerState === 'hidden' && (
+        {showHiddenOngoing && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}

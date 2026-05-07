@@ -10,7 +10,7 @@ import { useAuthStore } from "@/store/authStore";
 import { toast } from "sonner";
 
 
-export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMembers, isExpanded, onClose }: CallRoomProps & { isExpanded?: boolean }) {
+export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMembers, isExpanded, onClose, isHidden }: CallRoomProps & { isExpanded?: boolean; isHidden?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const params = useParams();
   const workspaceId = params?.workspaceId as string;
@@ -42,6 +42,23 @@ export default function CallRoom({ channelId, isAudioOnly, channel, workspaceMem
     // Sync local state if isAudioOnly prop changes (e.g. late sync)
     setIsVideoOn(!isAudioOnly);
   }, [isAudioOnly]);
+
+  const [wasVideoOnBeforeHide, setWasVideoOnBeforeHide] = useState(false);
+
+  useEffect(() => {
+    if (isHidden) {
+      setWasVideoOnBeforeHide(isVideoOn);
+      if (isVideoOn) {
+        webrtcService.toggleMedia('video', false);
+        setIsVideoOn(false);
+      }
+    } else if (isHidden === false) {
+      if (wasVideoOnBeforeHide) {
+        webrtcService.toggleMedia('video', true);
+        setIsVideoOn(true);
+      }
+    }
+  }, [isHidden]);
 
   useEffect(() => {
     let mounted = true;

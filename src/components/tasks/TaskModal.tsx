@@ -46,6 +46,18 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
   const [members, setMembers] = useState<any[]>([]);
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
   const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsAssigneeDropdownOpen(false);
+        setIsPriorityDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (isOpen && workspaceId) {
@@ -219,13 +231,16 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                 </div>
 
                 {/* RIGHT COLUMN: Settings */}
-                <div className="space-y-6 bg-[#0c0f24]/50 border border-indigo-500/10 p-5 rounded-2xl h-fit">
+                <div ref={dropdownRef} className="space-y-6 bg-[#0c0f24]/50 border border-indigo-500/10 p-5 rounded-2xl h-fit">
                   
                   {/* Priority */}
                   <div className="relative">
                     <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Priority</label>
                     <div 
-                      onClick={() => setIsPriorityDropdownOpen(!isPriorityDropdownOpen)}
+                      onClick={() => {
+                        setIsPriorityDropdownOpen(!isPriorityDropdownOpen);
+                        setIsAssigneeDropdownOpen(false);
+                      }}
                       className="w-full bg-[#1c2242] shadow-inner border border-indigo-500/20 rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer hover:border-indigo-500/40 transition-all select-none"
                     >
                       <div className={`flex items-center gap-2 text-sm font-bold uppercase ${priorityDetails[selectedPriority].color}`}>
@@ -236,7 +251,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                     </div>
                     
                     {isPriorityDropdownOpen && (
-                      <div className="absolute top-[75px] left-0 w-full bg-[#252b4d] shadow-2xl border border-indigo-500/20 rounded-xl z-50 overflow-hidden py-1">
+                      <div className="absolute bottom-full mb-2 left-0 w-full bg-[#252b4d] shadow-2xl border border-indigo-500/20 rounded-xl z-50 overflow-hidden py-1">
                           {Object.values(TaskPriority).map(p => (
                               <div 
                                   key={p}
@@ -274,7 +289,10 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                         <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">{selectedAssignees.length} assigned</span>
                      </label>
                      <div 
-                        onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
+                        onClick={() => {
+                          setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen);
+                          setIsPriorityDropdownOpen(false);
+                        }}
                         className="w-full bg-[#1c2242] border border-indigo-500/20 rounded-xl p-2.5 flex items-center min-h-[50px] cursor-pointer hover:border-indigo-500/40 transition-all flex-wrap gap-2 shadow-inner"
                       >
                         {selectedAssignees.length === 0 && (
@@ -301,7 +319,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                       </div>
 
                       {isAssigneeDropdownOpen && (
-                          <div className="absolute top-[85px] left-0 w-full bg-[#252b4d] border border-indigo-500/20 rounded-xl shadow-2xl z-50 overflow-hidden py-2 max-h-60 overflow-y-auto custom-scrollbar">
+                          <div className="absolute bottom-full mb-2 left-0 w-full bg-[#252b4d] border border-indigo-500/20 rounded-xl shadow-2xl z-50 overflow-hidden py-2 max-h-60 overflow-y-auto custom-scrollbar">
                                {members.length === 0 && (
                                    <div className="px-4 py-3 text-sm text-neutral-500 text-center font-medium">No members found</div>
                                )}
