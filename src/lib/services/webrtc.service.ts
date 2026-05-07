@@ -252,6 +252,12 @@ class WebRTCService {
 
     let peer = this.peers.get(senderSocketId);
 
+    if (peer && (peer.connectionState === 'failed' || peer.connectionState === 'disconnected' || peer.connectionState === 'closed')) {
+      console.log(`♻️ Recreating stuck peer connection for ${senderSocketId}`);
+      this.removePeer(senderSocketId);
+      peer = undefined;
+    }
+
     if (!peer) {
       peer = this.createPeerConnection(senderSocketId);
     }

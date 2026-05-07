@@ -55,8 +55,10 @@ export default function ChannelPage() {
   React.useEffect(() => {
     if (isCallActive) {
       sessionStorage.setItem(`call_active_${channelId}`, 'true');
+      setIsCallExpanded(true); // Default to fullscreen when call starts
     } else {
       sessionStorage.removeItem(`call_active_${channelId}`);
+      setIsCallExpanded(false);
     }
   }, [isCallActive, channelId]);
 
