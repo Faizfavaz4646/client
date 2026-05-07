@@ -205,6 +205,20 @@ class SocketService {
       this.socket.off("task:deleted", callback);
     }
   }
+
+  // --- Notification Events ---
+
+  onNewNotification(callback: (notification: any) => void) {
+    if (this.socket) {
+      this.socket.on("new-notification", callback);
+    }
+  }
+
+  offNewNotification(callback: (notification: any) => void) {
+    if (this.socket) {
+      this.socket.off("new-notification", callback);
+    }
+  }
 }
 
 // Export a single instance of the service to be shared across your whole app

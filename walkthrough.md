@@ -1,30 +1,31 @@
-# Walkthrough: WebRTC & Task UI Improvements
+# Walkthrough: Frontend Real-Time Notifications
 
-All planned changes have been successfully implemented and verified through a production build test. Here is a breakdown of the improvements:
+The real-time notification system has been successfully integrated into the frontend following the requested architectural pattern.
 
-### 1. Fixed WebRTC Media Toggle Bug
-> [!NOTE]
-> Previously, toggling the microphone caused the backend to accidentally disable the camera because the WebRTC signaling payload lacked the camera's explicit state.
+## Implementation Details
 
-- **Changes Made**: Updated `toggleMedia` in `webrtc.service.ts` to construct a robust payload that reads the active state of **both** your camera and microphone tracks (`this.localStream.getVideoTracks()[0]?.enabled`) on every toggle. 
-- **Result**: You can now mute and unmute your mic smoothly without it inadvertently affecting your camera's state, preventing sudden "Connection Lost" glitches for other users.
+### 1. Robust Architecture for Debugging
+As requested, the implementation has been split into dedicated files rather than dumping everything into the components:
+- **Types (`src/types/notification.types.ts`)**: Defines `INotification` and `NotificationType` to precisely match the MongoDB schema from the backend.
+- **API Service (`src/lib/services/notification.service.ts`)**: A dedicated class to handle `getNotifications`, `markAsRead`, and `markAllAsRead` REST API calls.
+- **State Management (`src/store/notificationStore.ts`)**: Created a Zustand global store (`useNotificationStore`). This handles state and logic, ensuring the unread count badge stays perfectly synced across the entire application.
 
-### 2. Implemented Background Calls (Hiding the Video Grid)
-> [!TIP]
-> You can now safely close the video call grid to use the app in full screen while keeping your active call running in the background!
+### 2. Real-Time Socket Connection
+- Updated `src/lib/services/socket.service.ts` with `onNewNotification` and `offNewNotification`.
+- When the backend emits a `new-notification` event (e.g., when a user is `@mentioned`), it instantly arrives at the frontend and is injected into the global Zustand store.
 
-- **Changes Made**: 
-  - Converted the "Close Grid" button to **"Hide Grid"**. Instead of destroying the call, it sets `isCallVisible` to `false` and smoothly collapses the video side-panel.
-  - Added an `isHidden` prop directly to the `CallRoom.tsx` component. When hidden, it automatically turns off your camera to save bandwidth and protect your privacy, while keeping your microphone active.
-  - Updated the active call banner to say **"Call in Background"** with a **"Return to Call"** button. Clicking this instantly un-hides the grid and reactivates your camera stream!
+### 3. Premium Bell Dropdown UI
+- **File**: `src/components/workspace/NotificationBell.tsx`
+- **Design Features**:
+  - Replaced the static bell icon in the Top Navigation bar with a fully functional, interactive `NotificationBell` component.
+  - Features a glowing, pulsing red dot badge when there are unread notifications.
+  - Uses `framer-motion` to smoothly animate the glassmorphic (`backdrop-blur-2xl`) dropdown list.
+  - Displays the sender's avatar, notification title, descriptive message, and a relative timestamp (e.g., "5 mins ago").
+  - Unread notifications are highlighted with a glowing indigo sidebar.
+  - Clicking a notification automatically marks it as read via the backend API.
+  - Clicking "Mark all read" instantly clears all unread states.
+  - Triggers a beautiful Sonner `toast` popup in the bottom corner of the screen whenever a notification arrives in real-time while you're active.
 
-### 3. Task Modal UI Fixes
-> [!IMPORTANT]
-> The Kanban dropdowns are now much more intuitive and will no longer get cut off at the bottom of the screen.
-
-- **Changes Made**:
-  - Changed the CSS positioning for the Date Picker, Assignee, and Priority dropdowns from `top-[...px]` to `bottom-full mb-2`, making them open upwards seamlessly.
-  - Added a `useRef` based global click-outside listener to the task modal, allowing you to click anywhere outside an open dropdown to dismiss it smoothly.
-  - Bound the Assignee and Priority dropdowns together—opening one automatically closes the other to prevent UI clutter.
-
-The app is fully built and ready for testing!
+## Verification
+- Run `npm run build` locally: **Success (0 errors)**.
+- Start the development server and test mentions/invites to see the glowing badge update instantly!
