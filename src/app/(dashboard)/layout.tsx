@@ -21,6 +21,7 @@ import { AddChannelMemberDropdown } from '@/components/chat/AddChannelMemberDrop
 import { ChannelRoleAssignmentDropdown } from '@/components/chat/ChannelRoleAssignmentDropdown';
 import InviteLinkModal from '@/components/chat/InviteLinkModal';
 import WorkspaceSettingsModal from '@/components/workspace/settings/WorkspaceSettingsModal';
+import NotificationBell from '@/components/workspace/NotificationBell';
 import { toast } from 'sonner';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
@@ -666,10 +667,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               <Search className="h-4 w-4 text-slate-500 sm:mr-2 group-focus-within:text-indigo-400 transition-colors shrink-0" />
               <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-sm text-slate-200 w-full placeholder:text-slate-600 hidden sm:block" />
             </div>
-            <button className="relative w-9 h-9 flex items-center justify-center rounded-full bg-slate-900/80 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all">
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-2 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(244,63,94,0.8)]"></span>
-            </button>
+            <NotificationBell />
             <div className="flex items-center gap-3 pl-3 border-l border-white/10 cursor-pointer group">
               <div className="relative">
                 {user?.avatar ? (
