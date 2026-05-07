@@ -174,8 +174,8 @@ export default function ChannelPage() {
 
       {/* 💬 Left Panel: Chat Room / Tasks */}
       <div className={`flex flex-col h-full bg-transparent transition-all duration-500 ease-in-out 
-        ${isCallExpanded ? 'w-0 opacity-0 pointer-events-none' : 
-          isCallActive ? 'w-full md:w-1/2 lg:w-2/3 md:border-r border-white/10 hidden md:flex' : 'w-full'}`}>
+        ${(isCallExpanded && isCallVisible) ? 'w-0 opacity-0 pointer-events-none' : 
+          (isCallActive && isCallVisible) ? 'w-full md:w-1/2 lg:w-2/3 md:border-r border-white/10 hidden md:flex' : 'w-full'}`}>
         
         {/* Unified Channel Header & Owner Call Controls */}
         <ChannelHeader 
