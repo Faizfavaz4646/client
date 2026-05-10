@@ -79,27 +79,24 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   const activeWorkspace = workspacesDetails[activeWorkspaceId] || user?.workspaces?.find(w => w.workspaceId === activeWorkspaceId);
   const displayName = activeWorkspace ? activeWorkspace.name : "Workspace";
 
-  // 1. Restore session on mount if user is missing
+  // 1. ALWAYS refresh user roles from backend on mount.
+  // Prevents stale localStorage role data from incorrectly granting admin UI to members.
   React.useEffect(() => {
-    const restoreSession = async () => {
+    const refreshSession = async () => {
       try {
         const res = await api.get('/auth/me');
         if (res.data.success && res.data.data.user) {
           setUser(res.data.data.user);
         }
       } catch (err) {
-        console.error("Session restoration failed", err);
+        // If refresh fails, localStorage data is still used as fallback
+        console.warn("Session refresh failed, using cached data");
       } finally {
         setLoading(false);
       }
     };
-
-    if (!user) {
-      restoreSession();
-    } else {
-      setLoading(false);
-    }
-  }, [user, setUser, setLoading]);
+    refreshSession();
+  }, []); // Run once on every mount — always get fresh roles from server
 
   // 2. Fetch Channels for active workspace
   React.useEffect(() => {
@@ -192,11 +189,11 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   };
 
   // Permissions Logic
-  // Simplify admin checks by scanning the user's organization array and their workspace roles.
-  const isPrivileged = user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner') ||
-    user?.workspaces?.some(w => w.workspaceId === activeWorkspaceId && (w.role === 'admin' || w.role === 'owner'));
-  const isOrgFounder = !!user?.organizations?.some(org => org.role === 'admin' || org.role === 'owner');
+  // ONLY check workspace-level role — this is the backend-enforced source of truth.
+  // Do NOT use org role here — a user can be org admin in their own org but just a member in this workspace.
   const activeOrgId = (activeWorkspace as any)?.orgId || user?.organizations?.[0]?.orgId;
+  const isPrivileged = !!user?.workspaces?.some(w => w.workspaceId === activeWorkspaceId && (w.role === 'admin' || w.role === 'owner'));
+  const isOrgFounder = !!user?.workspaces?.some(w => w.workspaceId === activeWorkspaceId && (w.role === 'admin' || w.role === 'owner'));
 
   // Loading State (Premium Spinner)
   if (isLoading) {
