@@ -7,9 +7,10 @@ class SocketService {
   // 1. Connect to the server
   connect() {
     if (!this.socket) {
+      // Resolve backend URL — NEXT_PUBLIC_BACKEND_URL must be set in production hosting env vars
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
                          process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 
-                         (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname.replace('app', 'synq-backend-wakl')}:5000`.replace(':5000', '') : "http://localhost:5000");
+                         "http://localhost:5000";
       
       let token = null;
       if (typeof window !== "undefined") {
@@ -23,19 +24,28 @@ class SocketService {
       }
 
       this.socket = io(backendUrl, {
-        transports: ["websocket"], // MANDATORY: Match backend enforcement
+        // Must match backend: server.ts enforces transports: ["websocket"]
+        transports: ["websocket"],
         withCredentials: true,
         autoConnect: true,
         auth: { token },
         reconnection: true,
-        reconnectionAttempts: 10,
+        reconnectionAttempts: 15,
         reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
       });
 
       this.socket.on("connect", () => {
         console.log("✅ Socket connected with ID:", this.socket?.id);
         
-        // CRITICAL: Re-join active channel on reconnection
+        // CRITICAL: Re-register the new-message listener after every reconnect
+        // because the old listener is lost on the new socket connection.
+        this.socket?.off("new-message");
+        this.socket?.on("new-message", (message: any) => {
+          this.newMessageCallbacks.forEach(cb => cb(message));
+        });
+
+        // Re-join active channel on reconnection
         if (this.activeChannelId) {
           this.socket?.emit("join-channel", this.activeChannelId);
           console.log(`🔄 Auto-rejoined channel: ${this.activeChannelId}`);
@@ -97,15 +107,21 @@ class SocketService {
   private newMessageCallbacks: ((message: any) => void)[] = [];
 
   // 5. Listen for incoming messages
+  // Callbacks are stored and the socket listener is registered on connect.
+  // This ensures messages are received even if the component mounts before the socket connects.
   onNewMessage(callback: (message: any) => void) {
-    if (this.socket) {
-      if (this.newMessageCallbacks.length === 0) {
-        this.socket.on("new-message", (message: any) => {
-          this.newMessageCallbacks.forEach(cb => cb(message));
-        });
-      }
+    // Always store the callback
+    if (!this.newMessageCallbacks.includes(callback)) {
       this.newMessageCallbacks.push(callback);
     }
+    // If socket is already connected, ensure listener is active
+    if (this.socket && this.socket.connected) {
+      this.socket.off("new-message");
+      this.socket.on("new-message", (message: any) => {
+        this.newMessageCallbacks.forEach(cb => cb(message));
+      });
+    }
+    // If socket is not connected yet, the "connect" handler above will register it
   }
 
   // Helper to remove listeners when components unmount
