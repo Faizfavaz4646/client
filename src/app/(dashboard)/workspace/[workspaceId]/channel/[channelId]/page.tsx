@@ -68,8 +68,8 @@ export default function ChannelPage() {
   const [workspaceMembers, setWorkspaceMembers] = React.useState<any[]>([]);
   
   const user = useAuthStore((state) => state.user);
-  const isPrivileged = (resolvedOrgId && user?.organizations?.some(org => String(org.orgId) === String(resolvedOrgId) && (org.role === 'admin' || org.role === 'owner'))) ||
-    user?.workspaces?.some((w: any) => (w.workspaceId === workspaceId || w._id === workspaceId) && (w.role === 'admin' || w.role === 'owner'));
+  // ONLY check workspace-level role — this is the backend-enforced source of truth.
+  const isPrivileged = !!user?.workspaces?.some((w: any) => (w.workspaceId === workspaceId || w._id === workspaceId) && (w.role === 'admin' || w.role === 'owner'));
 
   // React hook managing all the complex socket connections and variables
   const callTracker = useChannelCallTracker(
@@ -86,10 +86,28 @@ export default function ChannelPage() {
   }, [channelId]);
 
   // Ensure socket is connected globally for this channel
+  // CRITICAL FIX: joinChannel must happen AFTER socket is confirmed connected.
+  // In production, connect() is async — emitting join-channel before the
+  // handshake completes causes the event to be silently dropped on the server.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    socketService.connect();
-    socketService.joinChannel(channelId as string);
+    const socket = socketService.connect();
+
+    const doJoin = () => {
+      socketService.joinChannel(channelId as string);
+    };
+
+    if (socket.connected) {
+      // Already connected (e.g. navigating between channels)
+      doJoin();
+    } else {
+      // Wait for the connection handshake to complete first
+      socket.once('connect', doJoin);
+    }
+
+    return () => {
+      socket.off('connect', doJoin);
+    };
   }, [channelId]);
 
   React.useEffect(() => {
