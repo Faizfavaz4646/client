@@ -1,7 +1,11 @@
-export enum TaskStatus {
-  TODO = "TODO",
-  ONGOING = "ONGOING",
-  COMPLETED = "COMPLETED",
+export interface IStatus {
+  _id: string;
+  name: string;
+  workspaceId?: string;
+  channelId?: string;
+  isCompleted: boolean;
+  order: number;
+  color?: string;
 }
 
 export enum TaskPriority {
@@ -15,7 +19,7 @@ export interface ITask {
   _id: string;
   title: string;
   description: string;
-  status: TaskStatus;
+  statusId: IStatus | string;
   priority: TaskPriority;
   channelId: string | any;
   workspaceId: string;

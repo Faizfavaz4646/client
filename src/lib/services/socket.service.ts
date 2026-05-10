@@ -206,6 +206,44 @@ class SocketService {
     }
   }
 
+  // --- Status Events ---
+
+  onStatusCreated(callback: (data: { status: any }) => void) {
+    if (this.socket) {
+      this.socket.on("status:created", callback);
+    }
+  }
+
+  offStatusCreated(callback: (data: { status: any }) => void) {
+    if (this.socket) {
+      this.socket.off("status:created", callback);
+    }
+  }
+
+  onStatusUpdated(callback: (data: { status: any }) => void) {
+    if (this.socket) {
+      this.socket.on("status:updated", callback);
+    }
+  }
+
+  offStatusUpdated(callback: (data: { status: any }) => void) {
+    if (this.socket) {
+      this.socket.off("status:updated", callback);
+    }
+  }
+
+  onStatusDeleted(callback: (data: { statusId: string, workspaceId: string }) => void) {
+    if (this.socket) {
+      this.socket.on("status:deleted", callback);
+    }
+  }
+
+  offStatusDeleted(callback: (data: { statusId: string, workspaceId: string }) => void) {
+    if (this.socket) {
+      this.socket.off("status:deleted", callback);
+    }
+  }
+
   // --- Notification Events ---
 
   onNewNotification(callback: (notification: any) => void) {
