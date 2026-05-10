@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import TaskCard from '@/components/tasks/TaskCard';
-import { TaskStatus } from '@/types/task.types';
+
 
 export default function MyTasksPage() {
   const { tasks, isLoading, error, fetchMyTasks } = useTaskStore();

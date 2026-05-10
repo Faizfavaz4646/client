@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TaskStatus, ITask, TaskPriority } from '@/types/task.types';
+import { ITask, TaskPriority, IStatus } from '@/types/task.types';
 import { useTaskStore } from '@/store/taskStore';
-import { MoreVertical, Edit2, Trash2, Calendar, UserPlus, CircleDashed, Timer, CheckCircle2 } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Calendar, UserPlus, Circle, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TaskCardProps {
@@ -24,13 +24,16 @@ import { Flag } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 
 export default function TaskCard({ task, onEdit }: TaskCardProps) {
-  const { deleteTaskLocally } = useTaskStore();
+  const { deleteTaskLocally, statuses } = useTaskStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const user = useAuthStore(state => state.user);
   const params = useParams();
   const workspaceId = params?.workspaceId as string;
   const isPrivileged = user?.organizations?.some((org: any) => org.role === 'admin' || org.role === 'owner') ||
     user?.workspaces?.some((w: any) => (w.workspaceId === workspaceId || w._id === workspaceId) && (w.role === 'admin' || w.role === 'owner'));
+
+  const statusIdStr = typeof task.statusId === 'string' ? task.statusId : task.statusId?._id;
+  const taskStatus = statuses.find(s => s._id === statusIdStr) || (typeof task.statusId === 'object' ? task.statusId : null) as IStatus | null;
 
 
   const {
@@ -65,41 +68,38 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
       {...attributes}
       {...listeners}
       onClick={() => {
-        if (isPrivileged && onEdit) onEdit();
+        if (onEdit) onEdit();
       }}
       className={`relative group bg-[#0c0c0e] border overflow-hidden rounded-xl p-4 cursor-grab active:cursor-grabbing hover:border-indigo-400/30 transition-all ${
-        task.status === TaskStatus.COMPLETED ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-indigo-500/20 shadow-sm'
+        taskStatus?.isCompleted ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-white/10 shadow-sm'
       } ${
         isDragging ? 'opacity-50 z-50 ring-2 ring-indigo-500 scale-105' : ''
       }`}
     >
-        {/* Top-Right Absolute Icon for Completed */}
-        {task.status === TaskStatus.COMPLETED && (
-          <div className="absolute top-0 right-0 w-8 h-8 flex items-center justify-center bg-emerald-500/10 rounded-bl-xl border-b border-l border-emerald-500/20">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        {/* Premium Top Completion Badge */}
+        {taskStatus?.isCompleted && (
+          <div className="absolute -top-1 -right-1 w-10 h-10 overflow-hidden">
+            <div className="absolute top-0 right-0 w-[140%] h-[30%] bg-emerald-500/20 rotate-45 translate-x-[30%] translate-y-[20%] border-y border-emerald-500/30 flex items-center justify-center shadow-lg backdrop-blur-sm">
+              <CheckCircle2 className="w-3 h-3 text-emerald-500 -rotate-45" />
+            </div>
           </div>
         )}
         <div className="flex justify-between items-start mb-3 gap-2">
           <div className="flex items-center gap-2">
-            {/* Status Icon */}
-            {task.status === TaskStatus.TODO && (
-      <div title="To Do">
-        <CircleDashed className="w-4 h-4 text-slate-500" />
-      </div>
-    )}
-
-    {task.status === TaskStatus.ONGOING && (
-      <div title="In Progress">
-        <Timer className="w-4 h-4 text-indigo-400" />
-      </div>
-    )}
-
-    {task.status === TaskStatus.COMPLETED && (
-      <div title="Completed">
-        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-      </div>
-    )}
-
+            {/* Dynamic Status Icon */}
+            {taskStatus && (
+              <div 
+                title={taskStatus.name} 
+                className="flex items-center justify-center w-5 h-5 rounded-md"
+                style={{ backgroundColor: taskStatus.color ? `${taskStatus.color}20` : '#4f46e520' }}
+              >
+                {taskStatus.isCompleted ? (
+                   <CheckCircle2 className="w-3.5 h-3.5" style={{ color: taskStatus.color || '#34d399' }} />
+                ) : (
+                   <Circle className="w-3 h-3" style={{ color: taskStatus.color || '#818cf8', fill: taskStatus.color || '#818cf8' }} />
+                )}
+              </div>
+            )}
 
             <div className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${priorityColors[task.priority]}`}>
               <Flag size={10} className="stroke-[3px]" />
@@ -107,34 +107,34 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
             </div>
           </div>
           
-          {isPrivileged && (
-            <div className="relative">
-              <button
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  setIsMenuOpen(!isMenuOpen);
-                }}
-                className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-white hover:bg-white/10 rounded transition-all"
-              >
-                <MoreVertical size={16} />
-              </button>
+          <div className="relative">
+            <button
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                setIsMenuOpen(!isMenuOpen);
+              }}
+              className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-white hover:bg-white/10 rounded transition-all"
+            >
+              <MoreVertical size={16} />
+            </button>
 
-              {isMenuOpen && (
-                <div 
-                  className="absolute right-0 top-6 w-32 bg-[#18181b] border border-white/10 rounded-lg shadow-xl z-10 py-1 overflow-hidden"
-                  onPointerDown={(e) => e.stopPropagation()} // Prevent dragging when clicking menu
+            {isMenuOpen && (
+              <div 
+                className="absolute right-0 top-6 w-32 bg-[#18181b] border border-white/10 rounded-lg shadow-xl z-10 py-1 overflow-hidden"
+                onPointerDown={(e) => e.stopPropagation()} // Prevent dragging when clicking menu
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMenuOpen(false);
+                    onEdit && onEdit();
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-neutral-200 hover:bg-[#27272a] flex items-center gap-2 transition-colors"
                 >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsMenuOpen(false);
-                      onEdit && onEdit();
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-neutral-200 hover:bg-[#27272a] flex items-center gap-2 transition-colors"
-                  >
-                    <Edit2 size={14} /> Edit
-                  </button>
+                  <Edit2 size={14} /> Edit
+                </button>
+                {isPrivileged && (
                   <button
                     type="button"
                     onClick={handleDelete}
@@ -142,10 +142,10 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
                   >
                     <Trash2 size={14} /> Delete
                   </button>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <h4 className="text-white font-medium text-sm mb-1 line-clamp-2">

@@ -20,6 +20,7 @@ const taskSchema = z.object({
   priority: z.nativeEnum(TaskPriority),
   dueDate: z.string().optional(),
   assignees: z.array(z.string()).optional(),
+  statusId: z.string().optional(),
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
@@ -46,6 +47,8 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
   const [members, setMembers] = useState<any[]>([]);
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
   const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false);
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const { statuses } = useTaskStore();
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +56,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsAssigneeDropdownOpen(false);
         setIsPriorityDropdownOpen(false);
+        setIsStatusDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -91,11 +95,15 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
       priority: TaskPriority.MEDIUM,
       dueDate: '',
       assignees: [],
+      statusId: statuses.length > 0 ? statuses[0]._id : '',
     },
   });
 
   const selectedPriority = watch('priority');
+  const selectedStatusId = watch('statusId');
   const selectedAssignees = watch('assignees') || [];
+  
+  const currentStatusObj = statuses.find(s => s._id === selectedStatusId) || statuses[0];
 
   useEffect(() => {
     if (isOpen) {
@@ -106,6 +114,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
           priority: task.priority,
           dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
           assignees: task.assignees ? task.assignees.map((a: any) => typeof a === 'string' ? a : a._id) : [],
+          statusId: typeof task.statusId === 'string' ? task.statusId : task.statusId?._id || (statuses.length > 0 ? statuses[0]._id : ''),
         });
       } else {
         reset({
@@ -114,18 +123,25 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
           priority: TaskPriority.MEDIUM,
           dueDate: '',
           assignees: [],
+          statusId: statuses.length > 0 ? statuses[0]._id : '',
         });
       }
     } else {
         setIsAssigneeDropdownOpen(false);
         setIsPriorityDropdownOpen(false);
+        setIsStatusDropdownOpen(false);
     }
-  }, [isOpen, task, reset]);
+  }, [isOpen, task, reset, statuses]);
 
   const onSubmit = async (data: TaskFormValues) => {
     try {
+      // Clean up payload
+      const payload: any = { ...data };
+      if (!payload.dueDate) delete payload.dueDate;
+      if (!payload.statusId) delete payload.statusId;
+
       if (task) {
-        const response = await TaskService.updateTask(task._id, data);
+        const response = await TaskService.updateTask(task._id, payload);
         if (data.assignees && data.assignees.length > 0) {
             // Also need to update assignees using the specialized route if needed, 
             // but we can just use assignTask. In a robust setup, updateTask might handle it, 
@@ -149,7 +165,7 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
         }
       } else {
         const response = await TaskService.createTask({
-          ...data,
+          ...payload,
           channelId,
         });
         
@@ -260,6 +276,44 @@ export default function TaskModal({ isOpen, onClose, task, channelId }: TaskModa
                               >
                                   <Flag size={14} className="stroke-[3px]" />
                                   {p}
+                              </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status Dropdown */}
+                  <div className="relative">
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Column Status</label>
+                    <div 
+                      onClick={() => {
+                        setIsStatusDropdownOpen(!isStatusDropdownOpen);
+                        setIsAssigneeDropdownOpen(false);
+                        setIsPriorityDropdownOpen(false);
+                      }}
+                      className="w-full bg-[#1c2242] shadow-inner border border-indigo-500/20 rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer hover:border-indigo-500/40 transition-all select-none"
+                    >
+                      {currentStatusObj ? (
+                        <div className="flex items-center gap-2 text-sm font-bold uppercase text-white">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: currentStatusObj.color || '#4f46e5' }} />
+                          {currentStatusObj.name}
+                        </div>
+                      ) : (
+                        <div className="text-neutral-500 text-sm">Select status...</div>
+                      )}
+                      <ChevronDown size={14} className="text-neutral-400" />
+                    </div>
+                    
+                    {isStatusDropdownOpen && (
+                      <div className="absolute top-full mt-2 left-0 w-full bg-[#252b4d] shadow-2xl border border-indigo-500/20 rounded-xl z-50 overflow-hidden py-1 max-h-[200px] overflow-y-auto">
+                          {statuses.map(s => (
+                              <div 
+                                  key={s._id}
+                                  onClick={() => { setValue('statusId', s._id); setIsStatusDropdownOpen(false); }}
+                                  className="flex items-center gap-2 px-4 py-3 text-sm font-bold uppercase cursor-pointer hover:bg-white/5 transition-colors text-white"
+                              >
+                                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color || '#4f46e5' }} />
+                                  {s.name}
                               </div>
                           ))}
                       </div>

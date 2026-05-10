@@ -1,5 +1,5 @@
 import { api } from "../api";
-import type { ITask, TaskStatus, TaskPriority } from "@/types/task.types";
+import type { ITask, TaskPriority } from "@/types/task.types";
 
 export interface CreateTaskPayload {
   title: string;
@@ -8,6 +8,7 @@ export interface CreateTaskPayload {
   channelId: string;
   assignees?: string[];
   dueDate?: string;
+  statusId?: string;
 }
 
 export const TaskService = {
@@ -36,8 +37,8 @@ export const TaskService = {
   },
 
   // 5. Update task status (for drag and drop)
-  updateTaskStatus: async (taskId: string, status: TaskStatus): Promise<{ success: boolean; data: { task: ITask } }> => {
-    const response = await api.patch(`/tasks/${taskId}/status`, { status });
+  updateTaskStatus: async (taskId: string, statusId: string): Promise<{ success: boolean; data: { task: ITask } }> => {
+    const response = await api.patch(`/tasks/${taskId}/status`, { statusId });
     return response.data;
   },
 

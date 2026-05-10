@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useAuthStore } from "@/store/authStore";
 import { socketService } from "@/lib/services/socket.service";
-import { Send, Image as ImageIcon, Paperclip, Smile, Hash, Edit2, Trash2, X, Check, MoreVertical, Download, ChevronLeft, Loader2, Camera, FileText, Pin, Reply, Plus } from "lucide-react";
+import { Send, Image as ImageIcon, Paperclip, Smile, Hash, Edit2, Trash2, X, Check, MoreVertical, Download, ChevronLeft, Loader2, Camera, FileText, Pin, Reply, Plus, Mic, StopCircle, Lock, Play, Pause } from "lucide-react";
 import { api } from "@/lib/api";
 import { MessageService } from "@/lib/services/message.service";
 import type { Message } from "@/types/chat";
@@ -23,6 +23,15 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
   const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
   const [hiddenMessageIds, setHiddenMessageIds] = useState<string[]>([]);
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined' && channelId) {
+      try {
+        const stored = localStorage.getItem(`hidden-msgs-${channelId}`);
+        if (stored) setHiddenMessageIds(JSON.parse(stored));
+      } catch (e) {}
+    }
+  }, [channelId]);
   const [pendingFile, setPendingFile] = useState<{ file: File; url: string; type: string } | null>(null);
   const [mobileActionMessageId, setMobileActionMessageId] = useState<string | null>(null);
   const [activeReactMenuId, setActiveReactMenuId] = useState<string | null>(null);
@@ -33,8 +42,153 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Audio Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingStartY = useRef<number>(0);
+  const streamRef = useRef<MediaStream | null>(null);
+
   // 1. Add a mount state to fix Next.js hydration issues
   const [isMounted, setIsMounted] = useState(false);
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      setIsLocked(false);
+      setAudioBlob(null);
+      
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      alert("Microphone access is required to send voice messages.");
+    }
+  };
+
+  const stopRecording = (shouldSend = false, cancel = false) => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (cancel) {
+          setAudioBlob(null);
+        } else if (shouldSend) {
+          sendAudioMessage(blob);
+        } else {
+          setAudioBlob(blob);
+        }
+        
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+        clearInterval(recordingTimerRef.current as NodeJS.Timeout);
+      };
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const sendAudioMessage = async (blobToSend: Blob) => {
+    if (!blobToSend) return;
+    
+    const activeUserId = user?.id || (user as any)?._id || (user as any)?.userId;
+    const tempId = "temp-" + Date.now();
+    const audioUrl = URL.createObjectURL(blobToSend);
+    
+    const optimisticMsg: Message = {
+      _id: tempId,
+      content: "Voice Message",
+      type: "VOICE",
+      attachments: [{ url: audioUrl, name: "audio.webm", fileType: "audio/webm" }],
+      senderId: { _id: activeUserId, id: activeUserId, name: user?.name, avatar: user?.avatar } as any,
+      createdAt: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, optimisticMsg]);
+    setIsUploading(true);
+    
+    const fileToSend = new File([blobToSend], "audio.webm", { type: "audio/webm" });
+    
+    setAudioBlob(null);
+    setIsLocked(false);
+    
+    try {
+      const res = await MessageService.uploadMedia(fileToSend);
+      if (res.data?.success && res.data.data.attachment) {
+        const attachment = res.data.data.attachment;
+        const cleanAttachment = {
+          url: attachment.url,
+          name: "Voice Message",
+          fileType: attachment.fileType
+        };
+        const cachedReplyTo = replyingToMessage ? (replyingToMessage._id || replyingToMessage.id) : undefined;
+        setMessages(prev => prev.map(m => m._id === tempId ? { ...m, _id: undefined, attachments: [cleanAttachment] } : m));
+        socketService.sendMessage(channelId, "", "VOICE", [cleanAttachment], cachedReplyTo);
+        setReplyingToMessage(null);
+      }
+    } catch (err) {
+      console.error("Audio upload failed", err);
+      setMessages(prev => prev.filter(m => m._id !== tempId));
+    } finally {
+      setIsUploading(false);
+      URL.revokeObjectURL(audioUrl);
+    }
+  };
+
+  const handleMicDown = (e: React.TouchEvent | React.MouseEvent) => {
+    // We do NOT call e.preventDefault() here as it breaks normal touch interactions, but we do trigger recording
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    recordingStartY.current = clientY;
+    startRecording();
+  };
+
+  const handleMicMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!isRecording || isLocked) return;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    const diffY = Math.abs(clientY - recordingStartY.current);
+    
+    if (diffY > 50) {
+      setIsLocked(true);
+    }
+  };
+
+  const handleMicUp = () => {
+    if (!isRecording) return;
+    if (!isLocked) {
+      if (recordingTime < 1) {
+        setIsLocked(true);
+      } else {
+        stopRecording(true, false);
+      }
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -125,7 +279,7 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
         // We look for a message that has no _id OR a temp id, and matches the content
         const optimisticIdx = prev.findIndex(m => 
           (!m._id || (typeof m._id === 'string' && m._id.startsWith('temp-'))) && 
-          m.content === incomingData.content
+          (m.content === incomingData.content || (m.attachments?.[0]?.url && m.attachments?.[0]?.url === incomingData.attachments?.[0]?.url))
         );
         
         if (optimisticIdx > -1) {
@@ -286,7 +440,14 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
   };
 
   const handleDeleteForMe = (messageId: string) => {
-    setHiddenMessageIds(prev => [...prev, messageId]);
+    if (!messageId) return;
+    setHiddenMessageIds(prev => {
+      const next = [...prev, messageId];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`hidden-msgs-${channelId}`, JSON.stringify(next));
+      }
+      return next;
+    });
     setActiveMenuId(null);
   };
 
@@ -548,13 +709,11 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
                                     </button>
                                   )}
 
-                                  {isMe && (
-                                    <button onClick={() => handleDeleteForMe((msg._id || msg.id) as string)} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
-                                      <Trash2 className="w-3.5 h-3.5" /> Delete for me
-                                    </button>
-                                  )}
+                                  <button onClick={() => handleDeleteForMe((msg._id || msg.id) as string)} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+                                    <Trash2 className="w-3.5 h-3.5" /> Delete for me
+                                  </button>
 
-                                  {(isMe || isPrivileged) && (
+                                  {isMe && (
                                     <button onClick={() => handleDeleteForEveryone((msg._id || msg.id) as string)} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-rose-500 hover:bg-rose-500/10 transition-colors font-medium">
                                       <Trash2 className="w-3.5 h-3.5" /> Delete for everyone
                                     </button>
@@ -604,6 +763,11 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
                               <div className={`flex items-center gap-1.5 text-[13px] italic ${isMe ? 'text-slate-500' : 'text-white/50'}`}>
                                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="opacity-80"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
                                 <span>This message was deleted</span>
+                              </div>
+                            ) : msg.type === "AUDIO" || msg.type === "VOICE" ? (
+                              <div className="flex flex-col gap-1 min-w-[200px]">
+                                <audio controls src={msg.attachments?.[0]?.url || msg.content} className="h-10 w-full rounded-md" />
+                                {isMe && <span className={`text-[9px] self-end font-medium ${isMe ? 'text-slate-400' : 'text-white/50'}`}>{timeString}</span>}
                               </div>
                             ) : (msg.type === "IMAGE" || msg.type === "STICKER" || msg.type === "GIF") ? (
                               <div className="relative group/image max-w-xs md:max-w-sm flex flex-col gap-2">
@@ -925,14 +1089,12 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
                         </a>
                       )}
                       
-                      {mIsMe && (
-                        <button onClick={() => { handleDeleteForMe(mobileActionMessageId); setMobileActionMessageId(null); }} className="w-full bg-white/5 hover:bg-white/10 rounded-2xl flex items-center gap-3 px-5 py-4 text-white font-medium transition-colors">
-                          <Trash2 className="w-5 h-5 text-slate-400" /> Delete for Me
-                        </button>
-                      )}
+                      <button onClick={() => { handleDeleteForMe(mobileActionMessageId as string); setMobileActionMessageId(null); }} className="w-full bg-white/5 hover:bg-white/10 rounded-2xl flex items-center gap-3 px-5 py-4 text-white font-medium transition-colors">
+                        <Trash2 className="w-5 h-5 text-slate-400" /> Delete for Me
+                      </button>
                       
-                      {(mIsMe || isPrivileged) && (
-                        <button onClick={() => { handleDeleteForEveryone(mobileActionMessageId); setMobileActionMessageId(null); }} className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-2xl flex items-center gap-3 px-5 py-4 text-rose-500 font-bold transition-colors">
+                      {mIsMe && (
+                        <button onClick={() => { handleDeleteForEveryone(mobileActionMessageId as string); setMobileActionMessageId(null); }} className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-2xl flex items-center gap-3 px-5 py-4 text-rose-500 font-bold transition-colors">
                           <Trash2 className="w-5 h-5" /> Delete for Everyone
                         </button>
                       )}
@@ -1045,63 +1207,115 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
                   )}
                 </div>
 
-                <textarea
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage(e as any);
-                    }
-                  }}
-                  placeholder="Message #general"
-                  className="flex-1 bg-transparent border-none px-2 py-2.5 text-[15px] text-slate-200 focus:outline-none resize-none min-h-[44px] max-h-[200px] custom-scrollbar placeholder:text-slate-500"
-                  rows={1}
-                />
+                {isRecording || isLocked || audioBlob ? (
+                  <div className="flex-1 flex items-center justify-between px-4 py-2 bg-indigo-500/5 rounded-xl border border-indigo-500/20 mr-2">
+                    {/* Left: Timer and Dot */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                      <span className="text-rose-400 font-mono text-sm font-medium">{formatRecordingTime(recordingTime)}</span>
+                    </div>
 
-                <div className="flex items-center gap-1 shrink-0 pb-1.5 px-1 relative">
-                  {/* Click away layer for Media Picker */}
-                  {(isMediaPickerOpen || reactMediaPickerMessageId) && (
-                    <div className="fixed inset-0 z-[50]" onClick={() => { setIsMediaPickerOpen(false); setReactMediaPickerMessageId(null); }} />
-                  )}
-                  
-                  {/* Media Picker Popover */}
-                  {(isMediaPickerOpen || reactMediaPickerMessageId) && (
-                    <MediaPickerPopover
-                      onClose={() => { setIsMediaPickerOpen(false); setReactMediaPickerMessageId(null); }}
-                      onEmojiSelect={(emoji) => {
-                        if (reactMediaPickerMessageId) {
-                           socketService.reactMessage(channelId, reactMediaPickerMessageId, emoji);
-                        } else {
-                           setInputMessage(prev => prev + emoji);
-                        }
-                        setIsMediaPickerOpen(false);
-                        setReactMediaPickerMessageId(null);
-                      }}
-                      onStickerSelect={(url) => {
-                         if (!reactMediaPickerMessageId) handleRichMediaSend(url, 'STICKER');
-                      }}
-                      onGifSelect={(url) => {
-                         if (!reactMediaPickerMessageId) handleRichMediaSend(url, 'GIF');
-                      }}
-                    />
-                  )}
-                  
-                  <button 
-                    type="button" 
-                    onClick={() => setIsMediaPickerOpen(!isMediaPickerOpen)}
-                    className={`p-2 rounded-xl transition-colors ${isMediaPickerOpen ? 'text-indigo-400 bg-white/10' : 'text-slate-400 hover:text-amber-400 hover:bg-white/5'}`}
-                  >
-                    <Smile className="w-5 h-5" />
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={(!inputMessage.trim() && !pendingFile) || isUploading}
-                    className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all hover:scale-105 active:scale-95 ml-1 disabled:hover:scale-100"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
+                    {/* Middle: Status/Audio */}
+                    <div className="flex-1 flex items-center justify-center">
+                      {audioBlob ? (
+                        <audio controls src={URL.createObjectURL(audioBlob)} className="h-8 w-48 opacity-80" />
+                      ) : isLocked ? (
+                        <span className="text-sm font-medium text-indigo-400 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Locked. Ready to send.</span>
+                      ) : (
+                        <span className="text-sm font-medium text-slate-400 animate-pulse flex items-center gap-2">Drag to lock <Lock className="w-3.5 h-3.5" /></span>
+                      )}
+                    </div>
+
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => { stopRecording(false, true); setAudioBlob(null); setIsLocked(false); }} className="p-2 text-rose-400 hover:bg-rose-500/20 rounded-full transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      {(isRecording || isLocked || audioBlob) && (
+                        <button type="button" onClick={() => audioBlob ? sendAudioMessage(audioBlob) : stopRecording(true, false)} className="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full transition-colors ml-2 shadow-[0_2px_10px_rgba(79,70,229,0.3)]">
+                          <Send className="w-4 h-4 ml-0.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <textarea
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e as any);
+                      }
+                    }}
+                    placeholder="Message #general"
+                    className="flex-1 bg-transparent border-none px-2 py-2.5 text-[15px] text-slate-200 focus:outline-none resize-none min-h-[44px] max-h-[200px] custom-scrollbar placeholder:text-slate-500"
+                    rows={1}
+                  />
+                )}
+
+                {!isRecording && !isLocked && !audioBlob && (
+                  <div className="flex items-center gap-1 shrink-0 pb-1.5 px-1 relative">
+                    {/* Click away layer for Media Picker */}
+                    {(isMediaPickerOpen || reactMediaPickerMessageId) && (
+                      <div className="fixed inset-0 z-[50]" onClick={() => { setIsMediaPickerOpen(false); setReactMediaPickerMessageId(null); }} />
+                    )}
+                    
+                    {/* Media Picker Popover */}
+                    {(isMediaPickerOpen || reactMediaPickerMessageId) && (
+                      <MediaPickerPopover
+                        onClose={() => { setIsMediaPickerOpen(false); setReactMediaPickerMessageId(null); }}
+                        onEmojiSelect={(emoji) => {
+                          if (reactMediaPickerMessageId) {
+                             socketService.reactMessage(channelId, reactMediaPickerMessageId, emoji);
+                          } else {
+                             setInputMessage(prev => prev + emoji);
+                          }
+                          setIsMediaPickerOpen(false);
+                          setReactMediaPickerMessageId(null);
+                        }}
+                        onStickerSelect={(url) => {
+                           if (!reactMediaPickerMessageId) handleRichMediaSend(url, 'STICKER');
+                        }}
+                        onGifSelect={(url) => {
+                           if (!reactMediaPickerMessageId) handleRichMediaSend(url, 'GIF');
+                        }}
+                      />
+                    )}
+                    
+                    <button 
+                      type="button" 
+                      onClick={() => setIsMediaPickerOpen(!isMediaPickerOpen)}
+                      className={`p-2 rounded-xl transition-colors ${isMediaPickerOpen ? 'text-indigo-400 bg-white/10' : 'text-slate-400 hover:text-amber-400 hover:bg-white/5'}`}
+                    >
+                      <Smile className="w-5 h-5" />
+                    </button>
+                    
+                    {inputMessage.trim() || pendingFile ? (
+                      <button
+                        type="submit"
+                        disabled={isUploading}
+                        className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 transition-all hover:scale-105 active:scale-95 ml-1 disabled:hover:scale-100 shadow-[0_2px_10px_rgba(79,70,229,0.3)]"
+                      >
+                        <Send className="w-4 h-4 ml-0.5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onMouseDown={handleMicDown}
+                        onMouseMove={handleMicMove}
+                        onMouseUp={handleMicUp}
+                        onMouseLeave={handleMicUp}
+                        onTouchStart={handleMicDown}
+                        onTouchMove={handleMicMove}
+                        onTouchEnd={handleMicUp}
+                        className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 hover:text-indigo-300 transition-all ml-1 touch-none shadow-[0_2px_10px_rgba(79,70,229,0.1)] active:scale-90"
+                      >
+                        <Mic className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </form>
           );
