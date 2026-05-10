@@ -86,10 +86,28 @@ export default function ChannelPage() {
   }, [channelId]);
 
   // Ensure socket is connected globally for this channel
+  // CRITICAL FIX: joinChannel must happen AFTER socket is confirmed connected.
+  // In production, connect() is async — emitting join-channel before the
+  // handshake completes causes the event to be silently dropped on the server.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    socketService.connect();
-    socketService.joinChannel(channelId as string);
+    const socket = socketService.connect();
+
+    const doJoin = () => {
+      socketService.joinChannel(channelId as string);
+    };
+
+    if (socket.connected) {
+      // Already connected (e.g. navigating between channels)
+      doJoin();
+    } else {
+      // Wait for the connection handshake to complete first
+      socket.once('connect', doJoin);
+    }
+
+    return () => {
+      socket.off('connect', doJoin);
+    };
   }, [channelId]);
 
   React.useEffect(() => {
