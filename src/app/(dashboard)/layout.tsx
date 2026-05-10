@@ -734,7 +734,7 @@ function CreateWorkspaceForm({
         name,
         orgId: orgAdmin?.orgId
       });
-      const workspaceId = wsRes.data._id;
+      const workspaceId = wsRes.data.workspace._id || wsRes.data.workspace.id;
       setNewWorkspaceId(workspaceId);
 
       // 2. Generate Invite Code for this workspace
