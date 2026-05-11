@@ -265,9 +265,8 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
     // 3. Stop everything if the browser hasn't finished loading Local Storage yet
     if (!isMounted) return;
 
-    // Connect to the socket server using cookies
-    socketService.connect();
-    socketService.joinChannel(channelId);
+    // NOTE: socketService.connect() and joinChannel() are handled by page.tsx
+    // with the correct timing (waiting for socket.connected). Do NOT duplicate here.
 
     const newMessageCallback = (incomingData: Message) => {
       console.log("📨 New message arrived!", incomingData);
