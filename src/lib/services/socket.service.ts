@@ -3,6 +3,7 @@ import { io, Socket } from "socket.io-client";
 class SocketService {
   public socket: Socket | null = null;
   private activeChannelId: string | null = null;
+  private activeWorkspaceId: string | null = null;
 
   // Central callback registry: event name → array of callbacks
   // ALL listeners are stored here so they survive reconnections.
@@ -28,8 +29,9 @@ class SocketService {
       }
 
       this.socket = io(backendUrl, {
-        // Must match backend: server.ts enforces transports: ["websocket"]
-        transports: ["websocket"],
+        // Backend now supports polling + websocket (updated server.ts)
+        // polling first allows fallback if websocket upgrade fails on load balancers
+        transports: ["polling", "websocket"],
         withCredentials: true,
         autoConnect: true,
         auth: { token },
@@ -56,6 +58,12 @@ class SocketService {
         if (this.activeChannelId) {
           this.socket?.emit("join-channel", this.activeChannelId);
           console.log(`🔄 Auto-rejoined channel: ${this.activeChannelId}`);
+        }
+        // Re-join active workspace room on reconnection
+        // REQUIRED: status and task events now emit to workspace_${id} room
+        if (this.activeWorkspaceId) {
+          this.socket?.emit("join-workspace", this.activeWorkspaceId);
+          console.log(`🔄 Auto-rejoined workspace: ${this.activeWorkspaceId}`);
         }
       });
 
@@ -114,6 +122,25 @@ class SocketService {
     if (this.socket) {
       this.socket.emit("join-channel", channelId);
       console.log(`🚪 Joined channel: ${channelId}`);
+    }
+  }
+
+  // 3b. Join workspace room — required for status:created/updated/deleted
+  // and task:created/updated/deleted (backend now emits to workspace_${id})
+  joinWorkspace(workspaceId: string) {
+    this.activeWorkspaceId = workspaceId;
+    if (this.socket) {
+      this.socket.emit("join-workspace", workspaceId);
+      console.log(`🏢 Joined workspace: ${workspaceId}`);
+    }
+  }
+
+  leaveWorkspace(workspaceId: string) {
+    if (this.socket) {
+      this.socket.emit("leave-workspace", workspaceId);
+    }
+    if (this.activeWorkspaceId === workspaceId) {
+      this.activeWorkspaceId = null;
     }
   }
 
