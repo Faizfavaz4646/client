@@ -1,7 +1,8 @@
 import React from 'react';
+import dynamic from 'next/dynamic';
 import Navbar from './Navbar';
 import HeroSection from './HeroSection';
-import MarketingSections from './MarketingSections';
+const MarketingSections = dynamic(() => import('./MarketingSections'), { ssr: false });
 
 export default function MarketingPage() {
   return (
