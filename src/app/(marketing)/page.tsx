@@ -1,8 +1,7 @@
 import React from 'react';
-import dynamic from 'next/dynamic';
 import Navbar from './Navbar';
 import HeroSection from './HeroSection';
-const MarketingSections = dynamic(() => import('./MarketingSections'), { ssr: false });
+import MarketingClient from './MarketingClient';
 
 export default function MarketingPage() {
   return (
@@ -11,11 +10,11 @@ export default function MarketingPage() {
       <div className="relative z-10 w-full">
         <Navbar />
 
-        {/* HERO SECTION (Now Server-Side & Fast) */}
+        {/* HERO SECTION (Server-Side & Ultra-Fast) */}
         <HeroSection />
 
-        {/* ANIMATED SECTIONS & BACKGROUND (Loaded as a separate chunk) */}
-        <MarketingSections />
+        {/* CLIENT SIDE SECTIONS (Lazy-loaded via wrapper) */}
+        <MarketingClient />
       </div>
     </main>
   );
