@@ -986,7 +986,7 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
                                 >
                                   {u.avatar ? <img src={u.avatar} alt={u.name} className="w-full h-full rounded-full object-cover" /> : (u.name?.[0]?.toUpperCase() || 'U')}
                                 </div>
-                                <span 
+                                 <span
                                   onClick={() => window.dispatchEvent(new CustomEvent('open-user-profile', { detail: { userId: uId } }))}
                                   className="text-[13px] font-medium text-slate-200 cursor-pointer hover:text-white transition-colors"
                                 >
