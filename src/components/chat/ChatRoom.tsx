@@ -652,7 +652,7 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
                   {/* Avatar (Hidden for 'isMe') */}
                   {!isMe && (
                     <div 
-                      onClick={() => openProfile(senderIdVal || senderAltIdVal)}
+                      onClick={() => window.dispatchEvent(new CustomEvent('open-user-profile', { detail: { userId: senderIdVal || senderAltIdVal } }))}
                       className="cursor-pointer hover:scale-110 transition-transform active:scale-95"
                     >
                       {avatarUrl ? (
@@ -672,7 +672,7 @@ export default function ChatRoom({ channelId, channel, workspaceMembers }: { cha
                     {!isMe && (
                        <div className="flex items-baseline gap-2 mb-1 px-1">
                          <span 
-                           onClick={() => openProfile(senderIdVal || senderAltIdVal)}
+                           onClick={() => window.dispatchEvent(new CustomEvent('open-user-profile', { detail: { userId: senderIdVal || senderAltIdVal } }))}
                            className="text-[13px] font-bold text-slate-300 cursor-pointer hover:text-white transition-colors"
                          >
                            {senderName}
