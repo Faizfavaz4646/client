@@ -210,6 +210,35 @@ class SocketService {
   onStatusDeleted(callback: (data: { statusId: string, workspaceId: string }) => void) { this.addListener("status:deleted", callback); }
   offStatusDeleted(callback: (data: { statusId: string, workspaceId: string }) => void) { this.removeListener("status:deleted", callback); }
 
+  // --- User & Profile Events ---
+  onUserProfileUpdated(callback: (data: { userId: string, name: string, avatar: string, bio: string, username: string }) => void) {
+    this.addListener("user:profile-updated", callback);
+  }
+  offUserProfileUpdated(callback: (data: { userId: string, name: string, avatar: string, bio: string, username: string }) => void) {
+    this.removeListener("user:profile-updated", callback);
+  }
+
+  onUserStatusChanged(callback: (data: { userId: string, status: string }) => void) {
+    this.addListener("user:status-changed", callback);
+  }
+  offUserStatusChanged(callback: (data: { userId: string, status: string }) => void) {
+    this.removeListener("user:status-changed", callback);
+  }
+
+  onMemberRoleUpdated(callback: (data: { userId: string, role: string, workspaceId: string }) => void) {
+    this.addListener("member:role-updated", callback);
+  }
+  offMemberRoleUpdated(callback: (data: { userId: string, role: string, workspaceId: string }) => void) {
+    this.removeListener("member:role-updated", callback);
+  }
+
+  onMemberRemoved(callback: (data: { userId: string, workspaceId: string }) => void) {
+    this.addListener("member:removed", callback);
+  }
+  offMemberRemoved(callback: (data: { userId: string, workspaceId: string }) => void) {
+    this.removeListener("member:removed", callback);
+  }
+
   // --- Notification Events ---
   onNewNotification(callback: (notification: any) => void) { this.addListener("new-notification", callback); }
   offNewNotification(callback: (notification: any) => void) { this.removeListener("new-notification", callback); }
