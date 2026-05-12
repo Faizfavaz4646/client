@@ -89,12 +89,17 @@ export default function ChannelPage() {
   // CRITICAL FIX: joinChannel must happen AFTER socket is confirmed connected.
   // In production, connect() is async — emitting join-channel before the
   // handshake completes causes the event to be silently dropped on the server.
+  // Also join workspace room — backend now emits status/task events to workspace_${id}
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const socket = socketService.connect();
 
     const doJoin = () => {
       socketService.joinChannel(channelId as string);
+      // Join workspace room for Kanban statuses and task events
+      if (workspaceId) {
+        socketService.joinWorkspace(workspaceId as string);
+      }
     };
 
     if (socket.connected) {
@@ -108,7 +113,7 @@ export default function ChannelPage() {
     return () => {
       socket.off('connect', doJoin);
     };
-  }, [channelId]);
+  }, [channelId, workspaceId]);
 
   React.useEffect(() => {
     const fetchChannelData = async () => {
