@@ -352,13 +352,6 @@ export default function MarketingSections() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
             <div className="col-span-2 md:col-span-2 flex flex-col gap-6">
               <Link href="/" className="flex items-center gap-2 group">
-                <Image 
-                  src="/synq.svg" 
-                  alt="SYNQ Logo" 
-                  width={28} 
-                  height={28} 
-                  className="w-7 h-7 group-hover:scale-110 transition-transform"
-                />
                 <span className="font-extrabold text-xl tracking-wider text-white">SYNQ</span>
               </Link>
               <p className="text-slate-400 text-sm max-w-xs leading-relaxed">
@@ -373,15 +366,15 @@ export default function MarketingSections() {
             </div>
             <div className="flex flex-col gap-3">
               <strong className="text-white font-semibold text-sm">Company</strong>
-              <Link href="#marketing" className="text-slate-400 hover:text-white text-sm transition-colors">About Us</Link>
+              <Link href="/about" className="text-slate-400 hover:text-white text-sm transition-colors">About Us</Link>
               <Link href="#support" className="text-slate-400 hover:text-white text-sm transition-colors">Support</Link>
               <Link href="#" className="text-slate-400 hover:text-white text-sm transition-colors">Blog</Link>
             </div>
             <div className="flex flex-col gap-3">
               <strong className="text-white font-semibold text-sm">Legal</strong>
-              <Link href="#support" className="text-slate-400 hover:text-white text-sm transition-colors">Terms of Service</Link>
-              <Link href="#support" className="text-slate-400 hover:text-white text-sm transition-colors">Privacy Policy</Link>
-              <Link href="#support" className="text-slate-400 hover:text-white text-sm transition-colors">Security</Link>
+              <Link href="/privacy" className="text-slate-400 hover:text-white text-sm transition-colors">Terms of Service</Link>
+              <Link href="/privacy" className="text-slate-400 hover:text-white text-sm transition-colors">Privacy Policy</Link>
+              <Link href="/security" className="text-slate-400 hover:text-white text-sm transition-colors">Security</Link>
             </div>
           </div>
           <div className="pt-8 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-white/5">

@@ -18,13 +18,6 @@ export default function Navbar() {
 
           {/* LOGO */}
           <Link href="/" className="flex items-center gap-2 group shrink-0">
-            <Image 
-              src="/synq.svg" 
-              alt="SYNQ Logo" 
-              width={32} 
-              height={32} 
-              className="w-8 h-8 group-hover:scale-110 transition-transform"
-            />
             <span className="font-extrabold text-xl tracking-wider text-white">
               SYNQ
             </span>
