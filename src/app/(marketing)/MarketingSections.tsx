@@ -22,6 +22,7 @@ export default function MarketingSections() {
           speed={0.5}
           scanlineFrequency={0}
           warpAmount={0}
+          resolutionScale={0.5}
         />
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
       </div>
