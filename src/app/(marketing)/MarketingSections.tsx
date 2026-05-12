@@ -3,10 +3,29 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+
+const DarkVeil = dynamic(() => import('./DarkVeil'), { 
+  ssr: false,
+  loading: () => <div className="fixed inset-0 bg-[#0a0a0a]" /> 
+});
 
 export default function MarketingSections() {
   return (
     <>
+      {/* GLOBAL UNIFIED BACKGROUND */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <DarkVeil
+          hueShift={0}
+          noiseIntensity={0}
+          scanlineIntensity={0}
+          speed={0.5}
+          scanlineFrequency={0}
+          warpAmount={0}
+        />
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
+      </div>
+
       {/* Global CSS for Component Animations */}
       <style dangerouslySetInnerHTML={{__html: `
         /* Shared & Section 1 Animations */
