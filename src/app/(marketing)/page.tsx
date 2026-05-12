@@ -3,8 +3,13 @@
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import Navbar from './Navbar';
-import DarkVeil from './DarkVeil';
+
+const DarkVeil = dynamic(() => import('./DarkVeil'), { 
+  ssr: false,
+  loading: () => <div className="fixed inset-0 bg-[#0a0a0a]" /> 
+});
 
 export default function MarketingPage() {
   return (
@@ -138,7 +143,13 @@ export default function MarketingPage() {
                 {/* Mockup Video Grid */}
                 <div className="flex gap-4 flex-1">
                   <div className="flex-[2] bg-gradient-to-br from-blue-500/10 to-black/60 rounded-xl relative overflow-hidden border border-white/5">
-                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&q=80&w=600')] bg-cover bg-center opacity-40 mix-blend-luminosity"></div>
+                    <Image 
+                      src="https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&q=80&w=600"
+                      alt="Collaboration Mockup"
+                      fill
+                      className="object-cover opacity-40 mix-blend-luminosity"
+                      sizes="(max-width: 768px) 100vw, 400px"
+                    />
                     <div className="absolute top-4 left-4 bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full text-[10px] lg:text-xs font-semibold flex items-center gap-2 border border-emerald-500/30 backdrop-blur-sm anim-pulse-op z-10">
                       <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
                       Screen Sharing
