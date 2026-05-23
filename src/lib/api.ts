@@ -65,7 +65,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject({
-      message: error.response.data?.message || "Something went wrong",
+      message: error.response.data?.error?.message || error.response.data?.message || "Something went wrong",
       status: error.response.status,
     });
   }

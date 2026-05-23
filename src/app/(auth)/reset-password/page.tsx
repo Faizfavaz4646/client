@@ -40,7 +40,7 @@ function ResetPasswordForm() {
         router.push("/login");
       }, 3000);
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || "Invalid or expired token. Please request a new link.");
+      setError(err.message || "Invalid or expired token. Please request a new link.");
     }
   };
 
